@@ -1,0 +1,178 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod credentials;
+mod playback;
+mod server;
+
+use playback::{AudioDevice, PlaybackStatus, Player};
+use server::Session;
+use spatial_core::Library;
+use tauri::{Manager, State};
+use tokio::sync::Mutex;
+
+#[derive(Default)]
+struct NativeState {
+    session: Mutex<Option<Session>>,
+    subscription: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    player: Mutex<Player>,
+}
+
+async fn session(state: &NativeState) -> Result<Session, String> {
+    state
+        .session
+        .lock()
+        .await
+        .clone()
+        .ok_or("Connect to a server first".into())
+}
+
+#[tauri::command]
+async fn connect_server(
+    address: String,
+    token: String,
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+) -> Result<Library, String> {
+    let candidate = Session::new(&address, &token)?;
+    let library = candidate.library().await?;
+    credentials::save(&credentials::SavedConnection {
+        address: address.trim().to_string(),
+        token: token.trim().to_string(),
+    })?;
+    activate_session(candidate, app, &state).await;
+    Ok(library)
+}
+
+async fn activate_session(candidate: Session, app: tauri::AppHandle, state: &NativeState) {
+    state.player.lock().await.stop().await;
+    if let Some(task) = state.subscription.lock().await.take() {
+        task.abort();
+    }
+    *state.session.lock().await = Some(candidate.clone());
+    *state.subscription.lock().await = Some(tauri::async_runtime::spawn(candidate.events(app)));
+}
+
+#[derive(serde::Serialize)]
+struct RememberedConnection {
+    address: String,
+    library: Option<Library>,
+    error: Option<String>,
+}
+
+#[tauri::command]
+async fn restore_server(
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+) -> Result<Option<RememberedConnection>, String> {
+    let Some(saved) = credentials::load()? else {
+        return Ok(None);
+    };
+    let candidate = Session::new(&saved.address, &saved.token)?;
+    match candidate.library().await {
+        Ok(library) => {
+            activate_session(candidate, app, &state).await;
+            Ok(Some(RememberedConnection {
+                address: saved.address,
+                library: Some(library),
+                error: None,
+            }))
+        }
+        Err(error) => Ok(Some(RememberedConnection {
+            address: saved.address,
+            library: None,
+            error: Some(error),
+        })),
+    }
+}
+
+#[tauri::command]
+async fn disconnect_server(state: State<'_, NativeState>) -> Result<(), String> {
+    if let Some(task) = state.subscription.lock().await.take() {
+        task.abort();
+    }
+    state.player.lock().await.stop().await;
+    *state.session.lock().await = None;
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_library(state: State<'_, NativeState>) -> Result<Library, String> {
+    session(&state).await?.library().await
+}
+
+#[tauri::command]
+async fn get_artwork(id: String, state: State<'_, NativeState>) -> Result<String, String> {
+    session(&state).await?.artwork(&id).await
+}
+
+#[tauri::command]
+async fn audio_devices() -> Result<Vec<AudioDevice>, String> {
+    playback::devices().await
+}
+
+#[tauri::command]
+async fn play_track(
+    id: String,
+    device: String,
+    state: State<'_, NativeState>,
+) -> Result<(), String> {
+    let (grant, url) = session(&state).await?.grant(&id).await?;
+    let mut player = state.player.lock().await;
+    let result = player.play(&url, &grant.track, &device).await;
+    if let Err(error) = &result {
+        player.stop().await;
+        player.status.error = Some(error.clone());
+    }
+    result
+}
+
+#[tauri::command]
+async fn playback_status(state: State<'_, NativeState>) -> Result<PlaybackStatus, String> {
+    Ok(state.player.lock().await.poll().await)
+}
+
+#[tauri::command]
+async fn toggle_pause(state: State<'_, NativeState>) -> Result<(), String> {
+    state.player.lock().await.pause().await
+}
+
+#[tauri::command]
+async fn seek(seconds: f64, state: State<'_, NativeState>) -> Result<(), String> {
+    state.player.lock().await.seek(seconds).await
+}
+
+#[tauri::command]
+async fn stop_playback(state: State<'_, NativeState>) -> Result<(), String> {
+    state.player.lock().await.stop().await;
+    Ok(())
+}
+
+fn main() {
+    let app = tauri::Builder::default()
+        .manage(NativeState::default())
+        .invoke_handler(tauri::generate_handler![
+            connect_server,
+            restore_server,
+            disconnect_server,
+            get_library,
+            get_artwork,
+            audio_devices,
+            play_track,
+            playback_status,
+            toggle_pause,
+            seek,
+            stop_playback
+        ])
+        .build(tauri::generate_context!())
+        .expect("Cannot initialize Spatial");
+    app.run(|handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            let state = handle.state::<NativeState>();
+            tauri::async_runtime::block_on(async {
+                if let Some(task) = state.subscription.lock().await.take() {
+                    task.abort();
+                }
+                state.player.lock().await.stop().await;
+            });
+        }
+    });
+}

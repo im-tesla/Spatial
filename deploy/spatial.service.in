@@ -1,0 +1,18 @@
+[Unit]
+Description=Spatial music library and streaming server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash @RUNNER@ --log
+WorkingDirectory=@PROJECT@
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+Environment=RUST_LOG=spatial_server=info
+
+[Install]
+WantedBy=default.target

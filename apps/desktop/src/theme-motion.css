@@ -1,0 +1,19 @@
+@property --base { syntax: "<color>"; inherits: true; initial-value: rgb(16 19 14); }
+@property --surface { syntax: "<color>"; inherits: true; initial-value: rgb(23 28 20); }
+@property --sidebar { syntax: "<color>"; inherits: true; initial-value: rgb(19 23 17); }
+@property --player { syntax: "<color>"; inherits: true; initial-value: rgb(27 34 24); }
+@property --panel { syntax: "<color>"; inherits: true; initial-value: rgb(28 38 23); }
+@property --wash { syntax: "<color>"; inherits: true; initial-value: rgb(44 60 37); }
+@property --raised { syntax: "<color>"; inherits: true; initial-value: rgb(36 45 31); }
+@property --active-bg { syntax: "<color>"; inherits: true; initial-value: rgb(48 65 40); }
+@property --line { syntax: "<color>"; inherits: true; initial-value: rgb(56 67 50); }
+@property --strong-line { syntax: "<color>"; inherits: true; initial-value: rgb(72 86 65); }
+@property --accent { syntax: "<color>"; inherits: true; initial-value: rgb(200 224 184); }
+@property --accent-hover { syntax: "<color>"; inherits: true; initial-value: rgb(219 235 209); }
+@property --accent-ink { syntax: "<color>"; inherits: true; initial-value: rgb(20 27 16); }
+@property --text { syntax: "<color>"; inherits: true; initial-value: rgb(239 241 238); }
+@property --secondary-text { syntax: "<color>"; inherits: true; initial-value: rgb(200 207 196); }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: rgb(174 181 170); }
+@property --dim { syntax: "<color>"; inherits: true; initial-value: rgb(159 165 156); }
+@property --lyric-past { syntax: "<color>"; inherits: true; initial-value: rgb(158 168 151); }
+.app-shell, .connect-screen { transition: --base 1.15s cubic-bezier(.22,1,.36,1), --surface 1.15s cubic-bezier(.22,1,.36,1), --sidebar 1.15s cubic-bezier(.22,1,.36,1), --player 1.15s cubic-bezier(.22,1,.36,1), --panel 1.15s cubic-bezier(.22,1,.36,1), --wash 1.15s cubic-bezier(.22,1,.36,1), --raised 1.15s cubic-bezier(.22,1,.36,1), --active-bg 1.15s cubic-bezier(.22,1,.36,1), --line 1.15s cubic-bezier(.22,1,.36,1), --strong-line 1.15s cubic-bezier(.22,1,.36,1), --accent 1.15s cubic-bezier(.22,1,.36,1), --accent-hover 1.15s cubic-bezier(.22,1,.36,1), --accent-ink 1.15s cubic-bezier(.22,1,.36,1), --text 1.15s cubic-bezier(.22,1,.36,1), --secondary-text 1.15s cubic-bezier(.22,1,.36,1), --muted 1.15s cubic-bezier(.22,1,.36,1), --dim 1.15s cubic-bezier(.22,1,.36,1), --lyric-past 1.15s cubic-bezier(.22,1,.36,1), grid-template-columns var(--panel-duration, .42s) cubic-bezier(.22,1,.36,1); }

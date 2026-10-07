@@ -1,0 +1,53 @@
+name: Build and verify Spatial
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-server:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg mediainfo pkg-config
+      - run: cargo test --locked -p spatial-server
+      - run: cargo build --locked --release -p spatial-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spatial-server-ubuntu-22.04
+          path: |
+            target/release/spatial-server
+            deploy/
+
+  windows-desktop:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+      - run: choco install ffmpeg -y --no-progress
+      - shell: pwsh
+        run: |
+          $env:Path += ';C:\ProgramData\chocolatey\bin'
+          ./tools/setup-mpv.ps1
+          cargo test --locked -p spatial-server
+          cd apps/desktop
+          npm ci
+          npm test
+          npm run build
+          cargo test --locked -p spatial-desktop
+          npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spatial-windows-x64-installer
+          path: target/release/bundle/nsis/*setup.exe
