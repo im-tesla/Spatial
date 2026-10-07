@@ -753,7 +753,7 @@ pub async fn resolve_remote_artwork(state: &AppState) -> Result<usize> {
 
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(15))
-        .user_agent("Spatial/0.1.0 (https://github.com/im-tesla/Spatial)")
+        .user_agent("Spatial/0.1.2 (https://github.com/im-tesla/Spatial)")
         .build()
     {
         Ok(c) => c,

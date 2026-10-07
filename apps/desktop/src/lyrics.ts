@@ -80,7 +80,7 @@ export function getLyrics(track: Track): Promise<Lyrics | null> {
       const params = new URLSearchParams({ track_name: track.title.trim(), artist_name: track.artist.trim(), album_name: track.album.trim(), duration: String(duration) });
       const response = await fetch(`https://lrclib.net/api/get?${params}`, {
         credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(20000),
-        headers: { "Lrclib-Client": "Spatial v0.1.0 (app.spatial.desktop)" },
+        headers: { "Lrclib-Client": "Spatial v0.1.2 (app.spatial.desktop)" },
       });
       if (response.status === 404) { cache(key, null); return null; }
       if (response.status === 429 || response.status === 503) {
