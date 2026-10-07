@@ -8,3 +8,4 @@ ffmpeg = "ffmpeg"
 mediainfo = "mediainfo"
 rescan_seconds = 30
 settle_ms = 1000
+remote_artwork = true

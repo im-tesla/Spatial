@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { DialogTransition, ease, LyricsSlot, PageTransition, spring } from "./motion";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Headphones, Heart, Layers3, LibraryBig,
-  ListMusic, LoaderCircle, Mic2, Pause, Play, Radio, Search, Shuffle, SkipBack,
+  ListMusic, LoaderCircle, Mic2, Pause, Play, Radio, Repeat, Repeat1, Search, Shuffle, SkipBack,
   SkipForward, Speaker, Volume2, Waves, X } from "lucide-react";
 import { call, native, onEvent } from "./api";
 import { emptyFavorites, loadFavorites, saveFavorites } from "./favorites";
@@ -65,6 +65,15 @@ function NavItem({ active, children, onClick }: { active: boolean; children: Rea
   </motion.button>;
 }
 
+function shuffleList<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function AppContent() {
   const reduced = useReducedMotion();
   const [catalog, setCatalog] = useState<Library | null>(null);
@@ -93,6 +102,13 @@ function AppContent() {
   const [queueIndex, setQueueIndex] = useState(-1);
   const [starting, setStarting] = useState(false);
   const [seekPosition, setSeekPosition] = useState<number | null>(null);
+  const [shuffle, setShuffle] = useState<boolean>(() => localStorage.getItem("spatial-shuffle") === "true");
+  const [repeat, setRepeat] = useState<"off" | "all" | "one">(() => (localStorage.getItem("spatial-repeat") as "off" | "all" | "one") || "off");
+  const originalQueueRef = useRef<Track[]>([]);
+  const shuffleRef = useRef(shuffle);
+  shuffleRef.current = shuffle;
+  const repeatRef = useRef(repeat);
+  repeatRef.current = repeat;
   const current = queue[queueIndex];
   const queueRef = useRef({ queue, queueIndex });
   queueRef.current = { queue, queueIndex };
@@ -202,9 +218,22 @@ function AppContent() {
             setStatus(next);
             if (next.error) setError(next.error);
             const snapshot = queueRef.current;
-            if (next.ended && !advancing.current && snapshot.queueIndex + 1 < snapshot.queue.length) {
-              advancing.current = true;
-              await start(snapshot.queue, snapshot.queueIndex + 1);
+            if (next.ended && !advancing.current && snapshot.queue.length > 0) {
+              if (repeatRef.current === "one") {
+                advancing.current = true;
+                await start(snapshot.queue, snapshot.queueIndex);
+              } else if (snapshot.queueIndex + 1 < snapshot.queue.length) {
+                advancing.current = true;
+                await start(snapshot.queue, snapshot.queueIndex + 1);
+              } else if (repeatRef.current === "all") {
+                advancing.current = true;
+                if (shuffleRef.current && snapshot.queue.length > 1) {
+                  const reshuffled = shuffleList(snapshot.queue);
+                  await start(reshuffled, 0);
+                } else {
+                  await start(snapshot.queue, 0);
+                }
+              }
             }
           }
         }
@@ -266,9 +295,87 @@ function AppContent() {
       (selectedAlbum || view !== "favorites" || favorites.tracks.includes(track.id)) &&
       `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(search.toLowerCase()));
   const filteredTracks = filteredTrackEntries.map(entry => entry.track);
+  const playQueue = useCallback((tracks: Track[], index: number) => {
+    originalQueueRef.current = tracks;
+    if (shuffleRef.current && tracks.length > 1) {
+      const currentTrack = tracks[index];
+      const others = tracks.filter((_, i) => i !== index);
+      const shuffled = [currentTrack, ...shuffleList(others)];
+      void start(shuffled, 0);
+    } else {
+      void start(tracks, index);
+    }
+  }, [start]);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle(prev => {
+      const next = !prev;
+      localStorage.setItem("spatial-shuffle", String(next));
+      const snapshot = queueRef.current;
+      if (next) {
+        if (snapshot.queue.length > 1 && snapshot.queueIndex >= 0) {
+          originalQueueRef.current = snapshot.queue;
+          const currentTrack = snapshot.queue[snapshot.queueIndex];
+          const others = snapshot.queue.filter((_, i) => i !== snapshot.queueIndex);
+          const shuffled = [currentTrack, ...shuffleList(others)];
+          setQueue(shuffled);
+          setQueueIndex(0);
+          queueRef.current = { queue: shuffled, queueIndex: 0 };
+        }
+      } else {
+        if (originalQueueRef.current.length > 0 && current) {
+          const orig = originalQueueRef.current;
+          const found = orig.findIndex(t => t.id === current.id);
+          const newIdx = found >= 0 ? found : 0;
+          setQueue(orig);
+          setQueueIndex(newIdx);
+          queueRef.current = { queue: orig, queueIndex: newIdx };
+        }
+      }
+      return next;
+    });
+  }, [current]);
+
+  const toggleRepeat = useCallback(() => {
+    setRepeat(prev => {
+      const next = prev === "off" ? "all" : prev === "all" ? "one" : "off";
+      localStorage.setItem("spatial-repeat", next);
+      return next;
+    });
+  }, []);
+
+  const handleNext = useCallback(() => {
+    const snapshot = queueRef.current;
+    if (!snapshot.queue.length || starting) return;
+    if (snapshot.queueIndex + 1 < snapshot.queue.length) {
+      void start(snapshot.queue, snapshot.queueIndex + 1);
+    } else if (repeatRef.current === "all") {
+      if (shuffleRef.current && snapshot.queue.length > 1) {
+        const reshuffled = shuffleList(snapshot.queue);
+        void start(reshuffled, 0);
+      } else {
+        void start(snapshot.queue, 0);
+      }
+    }
+  }, [starting, start]);
+
+  const handlePrevious = useCallback(() => {
+    const snapshot = queueRef.current;
+    if (!snapshot.queue.length || starting) return;
+    if (status.position > 3) {
+      void action("seek", { seconds: 0 });
+      return;
+    }
+    if (snapshot.queueIndex > 0) {
+      void start(snapshot.queue, snapshot.queueIndex - 1);
+    } else if (repeatRef.current === "all") {
+      void start(snapshot.queue, snapshot.queue.length - 1);
+    }
+  }, [starting, status.position, start]);
+
   function playListedTrack(index: number) {
     if (view === "queue" && !selectedAlbum) void start(queue, filteredTrackEntries[index].position);
-    else void start(filteredTracks, index);
+    else playQueue(filteredTracks, index);
   }
   function openQueue() { setView("queue"); setSelectedAlbum(null); setSearch(""); }
   const albums = (catalog?.albums || []).filter(album => (view !== "favorites" || favorites.albums.includes(album.id)) && `${album.title} ${album.artist}`.toLowerCase().includes(search.toLowerCase()))
@@ -322,7 +429,7 @@ function AppContent() {
       {selected ? <>
         <button className="back-button" onClick={() => { setSelectedAlbum(null); setSearch(""); }}><ArrowLeft size={16} /> Back to collection</button>
         <section className="album-hero"><Cover id={selected.artwork_id} title={selected.title} /><div className="album-info"><span className="eyebrow">ALBUM {selected.atmos && <AtmosBadge />}</span><h1>{selected.title}</h1><p className="album-artist">{selected.artist}</p><p className="subtle">{year(selected.date)} <span>·</span> {selected.track_count} tracks <span>·</span> {Math.round(selected.duration / 60)} min</p>
-          <div className="album-actions"><button className="primary" disabled={starting} onClick={() => void start(albumTracks, 0)}><Play size={16} fill="currentColor" /> Play album</button><button className="secondary" onClick={() => { const shuffled = [...albumTracks]; for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; } void start(shuffled, 0); }}><Shuffle size={16} /> Shuffle</button><FavoriteButton active={favorites.albums.includes(selected.id)} label={`album ${selected.title}`} onClick={() => toggleFavorite("albums", selected.id)} /></div>
+          <div className="album-actions"><button className="primary" disabled={starting} onClick={() => playQueue(albumTracks, 0)}><Play size={16} fill="currentColor" /> Play album</button><button className="secondary" onClick={() => { if (!shuffle) { setShuffle(true); localStorage.setItem("spatial-shuffle", "true"); } playQueue(albumTracks, Math.floor(Math.random() * albumTracks.length)); }}><Shuffle size={16} /> Shuffle</button><FavoriteButton active={favorites.albums.includes(selected.id)} label={`album ${selected.title}`} onClick={() => toggleFavorite("albums", selected.id)} /></div>
         </div></section>
       </> : <section className="library-heading"><span className="eyebrow">{view === "queue" ? "THIS SESSION" : view === "favorites" ? "SAVED ON THIS DEVICE" : "LIBRARY"}</span><h1>{view === "queue" ? "Play queue" : view === "favorites" ? "Your favorites." : view === "albums" ? "Sound, in every dimension." : "Every track. All yours."}</h1><p>{view === "queue" ? <>{queue.length} tracks in your queue</> : view === "favorites" ? <>{favoriteAlbumCount} albums <span>·</span> {favoriteTrackCount} tracks</> : <>{catalog.albums.length} albums <span>·</span> {catalog.tracks.length} tracks <span>·</span> {catalog.tracks.filter(t => t.atmos).length} in Dolby Atmos</>}</p></section>}
       {!selected && (view === "albums" || view === "favorites") && <section className="collection-section"><div className="section-bar"><h2>{search && view !== "favorites" ? "Search results" : "Your albums"}<span>{albums.length}</span></h2><span className="sort-label">Newest releases first</span></div>
@@ -345,11 +452,26 @@ function AppContent() {
         initial={{ opacity: 0, y: reduced ? 0 : 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -3 }} transition={{ duration: reduced ? 0 : .16, ease }}>
         <strong>{current?.title || "Find your next dimension"}</strong><span>{current?.artist || "Choose an album to start listening"}</span>
       </motion.div></AnimatePresence><FavoriteButton active={!!current && favorites.tracks.includes(current.id)} label={current ? `track ${current.title}` : "current track"} disabled={!current} onClick={() => { if (current) toggleFavorite("tracks", current.id); }} /></div>
-      <div className="transport"><div className="transport-buttons"><button className="icon-button" aria-label="Previous track" disabled={queueIndex <= 0 || starting} onClick={() => void start(queue, queueIndex - 1)}><SkipBack size={18} fill="currentColor" /></button><motion.button className="play-button" aria-label={status.active && !status.paused ? "Pause" : "Play"} whileTap={!current || starting || reduced ? undefined : { scale: .9 }} disabled={!current || starting} onClick={() => status.active ? void action("toggle_pause") : void start(queue, queueIndex)}>
-        <AnimatePresence initial={false} mode="wait"><motion.span className="play-glyph" key={starting ? "loading" : status.active && !status.paused ? "pause" : "play"}
-          initial={{ opacity: 0, scale: reduced ? 1 : .8, rotate: reduced ? 0 : -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: reduced ? 1 : .8 }} transition={{ duration: reduced ? 0 : .12, ease }}>
-          {starting ? <LoaderCircle className="spin" size={20} /> : status.active && !status.paused ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-        </motion.span></AnimatePresence></motion.button><button className="icon-button" aria-label="Next track" disabled={queueIndex + 1 >= queue.length || starting || !current} onClick={() => void start(queue, queueIndex + 1)}><SkipForward size={18} fill="currentColor" /></button></div>
+      <div className="transport"><div className="transport-buttons">
+        <button className={`icon-button ${shuffle ? "is-active" : ""}`} aria-label={shuffle ? "Disable shuffle" : "Enable shuffle"} title={shuffle ? "Shuffle: On" : "Shuffle: Off"} onClick={toggleShuffle}>
+          <Shuffle size={17} />
+        </button>
+        <button className="icon-button" aria-label="Previous track" disabled={!current || starting || (queueIndex <= 0 && repeat !== "all" && status.position <= 3)} onClick={handlePrevious}>
+          <SkipBack size={18} fill="currentColor" />
+        </button>
+        <motion.button className="play-button" aria-label={status.active && !status.paused ? "Pause" : "Play"} whileTap={!current || starting || reduced ? undefined : { scale: .9 }} disabled={!current || starting} onClick={() => status.active ? void action("toggle_pause") : void start(queue, queueIndex)}>
+          <AnimatePresence initial={false} mode="wait"><motion.span className="play-glyph" key={starting ? "loading" : status.active && !status.paused ? "pause" : "play"}
+            initial={{ opacity: 0, scale: reduced ? 1 : .8, rotate: reduced ? 0 : -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: reduced ? 1 : .8 }} transition={{ duration: reduced ? 0 : .12, ease }}>
+            {starting ? <LoaderCircle className="spin" size={20} /> : status.active && !status.paused ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+          </motion.span></AnimatePresence>
+        </motion.button>
+        <button className="icon-button" aria-label="Next track" disabled={!current || starting || (queueIndex + 1 >= queue.length && repeat !== "all")} onClick={handleNext}>
+          <SkipForward size={18} fill="currentColor" />
+        </button>
+        <button className={`icon-button ${repeat !== "off" ? "is-active" : ""}`} aria-label={repeat === "one" ? "Repeat: Current track" : repeat === "all" ? "Repeat: Entire queue" : "Repeat: Off"} title={repeat === "one" ? "Repeat: One" : repeat === "all" ? "Repeat: All" : "Repeat: Off"} onClick={toggleRepeat}>
+          {repeat === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}
+        </button>
+      </div>
         <div className="progress"><span>{time(seekPosition ?? status.position)}</span><input aria-label="Playback position" aria-valuetext={`${time(seekPosition ?? status.position)} of ${time(status.duration || current?.duration || 0)}`} style={{ "--seek-fill": `${seekFill}%` } as CSSProperties} type="range" min={0} max={status.duration || current?.duration || 1} step={0.1} value={seekPosition ?? status.position} disabled={!status.active || starting} onChange={e => setSeekPosition(Number(e.target.value))} onPointerUp={e => commitSeek(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commitSeek(Number(e.currentTarget.value)); }} /><span>{time(status.duration || current?.duration || 0)}</span></div>
       </div><div className="player-details"><button ref={lyricsToggleRef} className={`icon-button ${lyricsOpen ? "is-active" : ""}`} aria-label={lyricsOpen ? "Close lyrics" : "Open lyrics"} aria-pressed={lyricsOpen} aria-controls="lyrics-sidebar" onClick={() => { setLyricsOpen(open => !open); }}><Mic2 size={18} /></button><button className="icon-button" aria-label="Receiver output settings" title="Control volume on your receiver" onClick={() => setModal("output")}><Volume2 size={18} /></button><button className={`icon-button ${view === "queue" ? "is-active" : ""}`} aria-label="Open queue" onClick={openQueue}><ListMusic size={19} /></button></div>
     </footer>

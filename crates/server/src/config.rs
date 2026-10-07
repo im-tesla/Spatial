@@ -17,6 +17,7 @@ pub struct Config {
     pub mediainfo: String,
     pub rescan_seconds: u64,
     pub settle_ms: u64,
+    pub remote_artwork: bool,
 }
 
 impl Default for Config {
@@ -31,6 +32,7 @@ impl Default for Config {
             mediainfo: "mediainfo".into(),
             rescan_seconds: 30,
             settle_ms: 1000,
+            remote_artwork: true,
         }
     }
 }

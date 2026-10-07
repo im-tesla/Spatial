@@ -7,3 +7,4 @@ ffmpeg = "/usr/bin/ffmpeg"
 mediainfo = "/usr/bin/mediainfo"
 rescan_seconds = 30
 settle_ms = 1000
+remote_artwork = true

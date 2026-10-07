@@ -27,7 +27,10 @@ pub async fn open(data_dir: &Path) -> Result<SqlitePool> {
         CREATE TABLE IF NOT EXISTS library_state (
             singleton INTEGER PRIMARY KEY CHECK(singleton = 1), revision INTEGER NOT NULL
         );
-        INSERT OR IGNORE INTO library_state VALUES (1, 0);"
+        INSERT OR IGNORE INTO library_state VALUES (1, 0);
+        CREATE TABLE IF NOT EXISTS remote_artwork_attempts (
+            album_id TEXT PRIMARY KEY, attempted_at INTEGER NOT NULL, found INTEGER NOT NULL, artwork_id TEXT
+        );"
     ).execute(&pool).await?;
     Ok(pool)
 }

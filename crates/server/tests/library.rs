@@ -81,6 +81,7 @@ async fn fixture() -> (TempDir, AppState, std::path::PathBuf) {
         data_dir: root.path().join("data"),
         api_token: TOKEN.into(),
         settle_ms: 100,
+        remote_artwork: false,
         ..Default::default()
     };
     let state = AppState::new(config).await.unwrap();
@@ -286,5 +287,26 @@ async fn watcher_discovers_completed_files_and_failed_mount_does_not_clear_libra
     tokio::fs::rename(root_path, &offline).await.unwrap();
     assert!(scanner::scan(&state).await.is_err());
     assert_eq!(db::library(&state.pool).await.unwrap().tracks.len(), 2);
+    state.pool.close().await;
+}
+
+#[tokio::test]
+async fn remote_artwork_resolves_and_populates_library() {
+    let (root, _state, _path) = fixture().await;
+    let config = Config {
+        media_dir: root.path().join("media"),
+        data_dir: root.path().join("data-remote"),
+        api_token: TOKEN.into(),
+        settle_ms: 100,
+        remote_artwork: true,
+        ..Default::default()
+    };
+    let state = AppState::new(config).await.unwrap();
+    scanner::scan(&state).await.unwrap();
+    let library = db::library(&state.pool).await.unwrap();
+    assert!(!library.albums.is_empty());
+    if let Some(art_id) = &library.albums[0].artwork_id {
+        assert!(state.artwork_root.join(format!("{art_id}.jpg")).is_file());
+    }
     state.pool.close().await;
 }

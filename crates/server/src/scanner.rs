@@ -3,7 +3,7 @@ use anyhow::{Context, Result, bail};
 use notify::{RecursiveMode, Watcher};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use spatial_core::Track;
+use spatial_core::{Album, Track};
 use sqlx::Row;
 use std::{
     collections::{HashMap, HashSet},
@@ -302,6 +302,7 @@ struct Existing {
     modified: i64,
     hash: String,
     cover_stamp: String,
+    artwork_id: Option<String>,
 }
 
 pub async fn scan(state: &AppState) -> Result<usize> {
@@ -350,13 +351,17 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let rows = sqlx::query(
-        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp FROM tracks",
+        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp,metadata FROM tracks",
     )
     .fetch_all(&state.pool)
     .await?;
     let existing: HashMap<String, Existing> = rows
         .iter()
         .map(|row| {
+            let meta_str: &str = row.get("metadata");
+            let artwork_id = serde_json::from_str::<Track>(meta_str)
+                .ok()
+                .and_then(|t| t.artwork_id);
             let entry = Existing {
                 id: row.get("id"),
                 path: row.get("source_path"),
@@ -364,6 +369,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 modified: row.get("modified_ms"),
                 hash: row.get("content_hash"),
                 cover_stamp: row.get("artwork_stamp"),
+                artwork_id,
             };
             (entry.path.clone(), entry)
         })
@@ -419,10 +425,11 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 .map(|e| e.id.clone())
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
             track.artwork_id = match artwork(state, &path, embedded, &hash).await {
-                Ok(value) => value,
+                Ok(Some(value)) => Some(value),
+                Ok(None) => previous.and_then(|e| e.artwork_id.clone()),
                 Err(error) => {
                     tracing::warn!(file = %path.display(), %error, "Artwork unavailable");
-                    None
+                    previous.and_then(|e| e.artwork_id.clone())
                 }
             };
             Ok((track, key, size, modified, hash, stamp))
@@ -469,6 +476,11 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         let _ = state.events.send(revision);
         tracing::info!(changed, revision, "Library updated");
     }
+    if state.config.remote_artwork {
+        if let Err(error) = resolve_remote_artwork(state).await {
+            tracing::warn!(%error, "Remote artwork resolution deferred");
+        }
+    }
     Ok(changed)
 }
 
@@ -501,3 +513,387 @@ pub async fn watch(state: AppState) -> Result<()> {
         }
     }
 }
+
+fn strip_bracketed(input: &str) -> String {
+    let mut result = String::new();
+    let mut round_depth = 0;
+    let mut square_depth = 0;
+    for ch in input.chars() {
+        match ch {
+            '(' => round_depth += 1,
+            ')' => {
+                if round_depth > 0 {
+                    round_depth -= 1;
+                }
+            }
+            '[' => square_depth += 1,
+            ']' => {
+                if square_depth > 0 {
+                    square_depth -= 1;
+                }
+            }
+            _ if round_depth == 0 && square_depth == 0 => result.push(ch),
+            _ => {}
+        }
+    }
+    result.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+async fn query_itunes(
+    client: &reqwest::Client,
+    artist: &str,
+    album: &str,
+) -> Result<Option<String>> {
+    let clean_artist = artist.trim();
+    let clean_album = album.trim();
+    let stripped_album = strip_bracketed(clean_album);
+
+    let mut queries = Vec::new();
+    if !clean_artist.is_empty() && !clean_album.is_empty() {
+        queries.push(format!("{clean_artist} {clean_album}"));
+    }
+    if !clean_artist.is_empty() && !stripped_album.is_empty() && stripped_album != clean_album {
+        queries.push(format!("{clean_artist} {stripped_album}"));
+    }
+    if clean_artist.eq_ignore_ascii_case("various artists")
+        || clean_artist.eq_ignore_ascii_case("unknown artist")
+        || queries.is_empty()
+    {
+        if !clean_album.is_empty() {
+            queries.push(clean_album.to_string());
+        }
+        if !stripped_album.is_empty() && stripped_album != clean_album {
+            queries.push(stripped_album.clone());
+        }
+    }
+
+    for q in queries {
+        let res = client
+            .get("https://itunes.apple.com/search")
+            .query(&[("term", q.as_str()), ("entity", "album"), ("limit", "1")])
+            .send()
+            .await;
+
+        if let Ok(response) = res {
+            if response.status().is_success() {
+                if let Ok(data) = response.json::<serde_json::Value>().await {
+                    if let Some(results) = data["results"].as_array() {
+                        if let Some(first) = results.first() {
+                            if let Some(art_url) = first["artworkUrl100"].as_str() {
+                                let high_res = art_url.replace("100x100bb", "600x600bb");
+                                return Ok(Some(high_res));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
+async fn query_musicbrainz(
+    client: &reqwest::Client,
+    artist: &str,
+    album: &str,
+) -> Result<Option<String>> {
+    let clean_artist = artist.trim();
+    let clean_album = album.trim();
+    let stripped_album = strip_bracketed(clean_album);
+    let target_album = if !stripped_album.is_empty() {
+        stripped_album.as_str()
+    } else {
+        clean_album
+    };
+
+    if target_album.is_empty() {
+        return Ok(None);
+    }
+
+    let query_str = if !clean_artist.is_empty()
+        && !clean_artist.eq_ignore_ascii_case("various artists")
+        && !clean_artist.eq_ignore_ascii_case("unknown artist")
+    {
+        format!("artist:\"{}\" AND release:\"{}\"", clean_artist, target_album)
+    } else {
+        format!("release:\"{}\"", target_album)
+    };
+
+    let res = client
+        .get("https://musicbrainz.org/ws/2/release")
+        .query(&[("query", query_str.as_str()), ("fmt", "json"), ("limit", "1")])
+        .send()
+        .await;
+
+    if let Ok(response) = res {
+        if response.status().is_success() {
+            if let Ok(data) = response.json::<serde_json::Value>().await {
+                if let Some(releases) = data["releases"].as_array() {
+                    if let Some(first) = releases.first() {
+                        if let Some(mbid) = first["id"].as_str() {
+                            let caa_url = format!("https://coverartarchive.org/release/{mbid}/front-500");
+                            let head = client.head(&caa_url).send().await;
+                            if let Ok(head_res) = head {
+                                if head_res.status().is_success() {
+                                    return Ok(Some(caa_url));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
+async fn download_and_process_artwork(
+    client: &reqwest::Client,
+    state: &AppState,
+    url: &str,
+) -> Result<Option<String>> {
+    let response = match client.get(url).send().await {
+        Ok(res) if res.status().is_success() => res,
+        _ => return Ok(None),
+    };
+    let bytes = response.bytes().await?;
+    if bytes.len() < 512 {
+        return Ok(None);
+    }
+    let temp_in = state
+        .artwork_root
+        .join(format!("remote-{}.tmp", uuid::Uuid::new_v4()));
+    tokio::fs::write(&temp_in, &bytes).await?;
+
+    let temp_out = state
+        .artwork_root
+        .join(format!("remote-{}-600.jpg", uuid::Uuid::new_v4()));
+    let output = tokio::time::timeout(
+        Duration::from_secs(30),
+        process(&state.config.ffmpeg)
+            .args(["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i"])
+            .arg(&temp_in)
+            .args([
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=600:600:force_original_aspect_ratio=decrease",
+                "-q:v",
+                "3",
+            ])
+            .arg(&temp_out)
+            .output(),
+    )
+    .await;
+
+    let _ = tokio::fs::remove_file(&temp_in).await;
+
+    let success = match output {
+        Ok(Ok(out)) if out.status.success() => true,
+        _ => false,
+    };
+
+    if !success {
+        let _ = tokio::fs::remove_file(&temp_out).await;
+        return Ok(None);
+    }
+
+    let hash = digest(&temp_out).await?;
+    let id = format!("{hash}-600-v1");
+    let destination = state.artwork_root.join(format!("{id}.jpg"));
+
+    if destination.is_file() {
+        let _ = tokio::fs::remove_file(&temp_out).await;
+    } else {
+        tokio::fs::rename(&temp_out, &destination).await?;
+    }
+
+    Ok(Some(id))
+}
+
+async fn fetch_remote_cover(
+    client: &reqwest::Client,
+    state: &AppState,
+    artist: &str,
+    album: &str,
+) -> Result<Option<String>> {
+    if artist.eq_ignore_ascii_case("unknown artist") && album.eq_ignore_ascii_case("unknown album") {
+        return Ok(None);
+    }
+
+    if let Ok(Some(url)) = query_itunes(client, artist, album).await {
+        if let Ok(Some(id)) = download_and_process_artwork(client, state, &url).await {
+            return Ok(Some(id));
+        }
+    }
+
+    if let Ok(Some(url)) = query_musicbrainz(client, artist, album).await {
+        if let Ok(Some(id)) = download_and_process_artwork(client, state, &url).await {
+            return Ok(Some(id));
+        }
+    }
+
+    Ok(None)
+}
+
+pub async fn resolve_remote_artwork(state: &AppState) -> Result<usize> {
+    if !state.config.remote_artwork {
+        return Ok(0);
+    }
+    let lib = crate::db::library(&state.pool).await?;
+    let missing_albums: Vec<Album> = lib
+        .albums
+        .into_iter()
+        .filter(|a| a.artwork_id.is_none())
+        .collect();
+
+    if missing_albums.is_empty() {
+        return Ok(0);
+    }
+
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(15))
+        .user_agent("Spatial/0.1.0 (https://github.com/im-tesla/Spatial)")
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!(error = %e, "Could not initialize HTTP client for remote artwork");
+            return Ok(0);
+        }
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64;
+
+    let mut changed = 0;
+
+    for album in missing_albums {
+        let attempt = sqlx::query(
+            "SELECT attempted_at, found, artwork_id FROM remote_artwork_attempts WHERE album_id = ?",
+        )
+        .bind(&album.id)
+        .fetch_optional(&state.pool)
+        .await?;
+
+        if let Some(row) = attempt {
+            let attempted_at: i64 = row.get("attempted_at");
+            let found: i64 = row.get("found");
+            let cached_art: Option<String> = row.get("artwork_id");
+
+            if found == 1 {
+                if let Some(art_id) = cached_art {
+                    if state.artwork_root.join(format!("{art_id}.jpg")).is_file() {
+                        let mut tx = state.pool.begin().await?;
+                        let rows = sqlx::query("SELECT id, metadata FROM tracks")
+                            .fetch_all(&mut *tx)
+                            .await?;
+                        let mut updated_tracks = 0;
+                        for r in rows {
+                            let tid: String = r.get("id");
+                            let mraw: String = r.get("metadata");
+                            if let Ok(mut tr) = serde_json::from_str::<Track>(&mraw) {
+                                if tr.album_id == album.id && tr.artwork_id.is_none() {
+                                    tr.artwork_id = Some(art_id.clone());
+                                    sqlx::query("UPDATE tracks SET metadata = ? WHERE id = ?")
+                                        .bind(serde_json::to_string(&tr)?)
+                                        .bind(tid)
+                                        .execute(&mut *tx)
+                                        .await?;
+                                    updated_tracks += 1;
+                                }
+                            }
+                        }
+                        if updated_tracks > 0 {
+                            sqlx::query(
+                                "UPDATE library_state SET revision = revision + 1 WHERE singleton = 1",
+                            )
+                            .execute(&mut *tx)
+                            .await?;
+                            changed += 1;
+                        }
+                        tx.commit().await?;
+                        continue;
+                    }
+                }
+            } else if (now - attempted_at) < 604800 {
+                continue;
+            }
+        }
+
+        tracing::info!(album = %album.title, artist = %album.artist, "Searching remote artwork fallback");
+
+        match fetch_remote_cover(&client, state, &album.artist, &album.title).await {
+            Ok(Some(artwork_id)) => {
+                tracing::info!(album = %album.title, %artwork_id, "Resolved remote artwork");
+                let mut tx = state.pool.begin().await?;
+                let rows = sqlx::query("SELECT id, metadata FROM tracks")
+                    .fetch_all(&mut *tx)
+                    .await?;
+
+                let mut updated_tracks = 0;
+                for row in rows {
+                    let track_id: String = row.get("id");
+                    let meta_raw: String = row.get("metadata");
+                    if let Ok(mut track) = serde_json::from_str::<Track>(&meta_raw) {
+                        if track.album_id == album.id && track.artwork_id.is_none() {
+                            track.artwork_id = Some(artwork_id.clone());
+                            let updated_meta = serde_json::to_string(&track)?;
+                            sqlx::query("UPDATE tracks SET metadata = ? WHERE id = ?")
+                                .bind(updated_meta)
+                                .bind(track_id)
+                                .execute(&mut *tx)
+                                .await?;
+                            updated_tracks += 1;
+                        }
+                    }
+                }
+
+                sqlx::query(
+                    "INSERT INTO remote_artwork_attempts (album_id, attempted_at, found, artwork_id)
+                     VALUES (?, ?, 1, ?)
+                     ON CONFLICT(album_id) DO UPDATE SET attempted_at = excluded.attempted_at, found = 1, artwork_id = excluded.artwork_id",
+                )
+                .bind(&album.id)
+                .bind(now)
+                .bind(&artwork_id)
+                .execute(&mut *tx)
+                .await?;
+
+                if updated_tracks > 0 {
+                    sqlx::query("UPDATE library_state SET revision = revision + 1 WHERE singleton = 1")
+                        .execute(&mut *tx)
+                        .await?;
+                    changed += 1;
+                }
+                tx.commit().await?;
+            }
+            Ok(None) => {
+                tracing::debug!(album = %album.title, artist = %album.artist, "No remote artwork found");
+                sqlx::query(
+                    "INSERT INTO remote_artwork_attempts (album_id, attempted_at, found, artwork_id)
+                     VALUES (?, ?, 0, NULL)
+                     ON CONFLICT(album_id) DO UPDATE SET attempted_at = excluded.attempted_at, found = 0",
+                )
+                .bind(&album.id)
+                .bind(now)
+                .execute(&state.pool)
+                .await?;
+            }
+            Err(e) => {
+                tracing::warn!(album = %album.title, error = %e, "Failed remote artwork lookup");
+            }
+        }
+    }
+
+    if changed > 0 {
+        let revision = crate::db::revision(&state.pool).await?;
+        let _ = state.events.send(revision);
+        tracing::info!(changed, revision, "Library updated with remote artwork");
+    }
+
+    Ok(changed)
+}
+
