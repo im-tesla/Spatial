@@ -22,6 +22,12 @@ unit_quote() {
   value="${value//%/%%}"
   printf '"%s"' "$value"
 }
+unit_path() {
+  local value="$1"
+  value="${value//%/%%}"
+  value="${value//\$/\$\$}"
+  printf '%s' "$value"
+}
 {
   while IFS= read -r line || [[ -n "$line" ]]; do
     case "$line" in
@@ -30,7 +36,7 @@ unit_quote() {
         runner="${runner//\$/\$\$}"
         printf 'ExecStart=/bin/bash %s --log\n' "$runner"
         ;;
-      'WorkingDirectory=@PROJECT@') printf 'WorkingDirectory=%s\n' "$(unit_quote "$project_dir")" ;;
+      'WorkingDirectory=@PROJECT@') printf 'WorkingDirectory=%s\n' "$(unit_path "$project_dir")" ;;
       *) printf '%s\n' "$line" ;;
     esac
   done < "$script_dir/spatial.service.in"
