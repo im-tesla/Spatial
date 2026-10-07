@@ -3,6 +3,5 @@
   "identifier": "default",
   "description": "Spatial window events and native commands",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "clipboard-manager:allow-write-text"]
 }
-

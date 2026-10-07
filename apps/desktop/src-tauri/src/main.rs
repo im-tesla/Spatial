@@ -148,6 +148,7 @@ async fn stop_playback(state: State<'_, NativeState>) -> Result<(), String> {
 
 fn main() {
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(NativeState::default())
         .invoke_handler(tauri::generate_handler![
             connect_server,

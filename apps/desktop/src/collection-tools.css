@@ -1,0 +1,29 @@
+.collection-tools { margin: 0 0 24px; }
+.collection-tools.compact { margin: 0; }
+.collection-tools.compact .selection-tools { flex: none; }
+.section-bar.bulk-mode { align-items: flex-start; flex-wrap: wrap; gap: 10px; }
+.section-bar.bulk-mode > .collection-tools { width: 100%; }
+.collection-toolbar, .selection-tools, .sharing-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.collection-toolbar { justify-content: space-between; row-gap: 12px; }
+.selection-tools { flex: 1; min-width: 0; }
+.sharing-tools { margin-left: auto; }
+.tool-button { display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--secondary-text); font-size: 12px; line-height: 1.4; }
+.tool-button:hover:not(:disabled), .tool-button.is-active { background: var(--raised); color: var(--accent); border-color: var(--strong-line); }
+.selection-count { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; padding: 0 5px; }
+.collection-notice { margin: 12px 0 0; color: var(--secondary-text); font-size: 12px; line-height: 1.7; }
+.collection-error { color: var(--text); }
+.favorites-import { margin-top: 16px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); padding: 18px; }
+.import-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.import-heading strong { font-weight: 600; }
+.favorites-import p { margin: 5px 0 15px; font-size: 12px; color: var(--muted); }
+.favorites-paste-label { display: block; font-size: 12px; color: var(--secondary-text); margin: 15px 0; }
+.favorites-paste { display: block; width: 100%; min-height: 130px; max-height: 340px; resize: vertical; padding: 12px; margin-top: 8px; border: 1px solid var(--strong-line); border-radius: 6px; background: var(--raised); color: var(--text); font: 12px/1.6 Consolas, monospace; }
+.favorites-paste::placeholder { color: var(--dim); }
+.favorites-paste:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.album-card { position: relative; }
+.album-card.is-selected .cover { box-shadow: inset 0 0 0 2px var(--accent); }
+.album-card.is-selected .artwork-wrap { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.selection-checkbox { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.album-selection { position: absolute; top: 10px; left: 10px; z-index: 2; filter: drop-shadow(0 1px 3px #0008); }
+.track-row.is-selected { background: var(--active-bg); }
+.track-row > .selection-checkbox { justify-self: center; }

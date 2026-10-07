@@ -20,6 +20,7 @@ const albums = [
   { id: "fixture-sun", title: "Sun Room", artist: "Spatial", date: "2025", track_count: 1, duration: 20, atmos: true, artwork_id: "fixture-orange" },
 ];
 const showcase = new URLSearchParams(location.search).has("showcase");
+const friendLibrary = new URLSearchParams(location.search).get("library") === "friend";
 if (showcase) albums.push(
   { id: "fixture-tidal", title: "Tidal Forms", artist: "Lowlight", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-blue" },
   { id: "fixture-afterglow", title: "Afterglow", artist: "Mira Vale", date: "2025", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-rose" },
@@ -37,6 +38,10 @@ if (showcase) {
       album_artist: album.artist, album: album.title, date: album.date, track_number: index + 1, artwork_id: album.artwork_id,
     }));
   }
+}
+if (friendLibrary) {
+  for (const album of albums) album.id = `friend-${album.id}`;
+  for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
 }
 const library: Library = { revision: 1, albums, tracks };
 const connectionScenario = new URLSearchParams(location.search).get("connection");
@@ -69,12 +74,13 @@ let status: PlaybackStatus = { track_id: null, active: false, paused: false, end
   passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "plugin:clipboard-manager|write_text") return navigator.clipboard.writeText(String(payload.text));
   if (command === "restore_server") {
     restoreCalls++;
     console.info(`Fixture restore request ${restoreCalls}`);
     if (!connectionScenario) return null;
     const offline = connectionScenario === "invalid" || (connectionScenario === "offline" && restoreCalls === 1);
-    return { address: "http://127.0.0.1:8787", library: offline ? null : library,
+    return { address: friendLibrary ? "http://friend-library.example:8787" : "http://127.0.0.1:8787", library: offline ? null : library,
       error: offline ? connectionScenario === "invalid" ? "The server rejected your access token." : "Cannot reach Spatial. Check the server address, service and firewall." : null };
   }
   if (command === "get_library" || command === "connect_server") return library;

@@ -14,7 +14,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 - **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the Windows HDMI output, with source files served without transcoding.
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
-- **Make it yours.** Save favorite albums and tracks locally on each device, and search the collection as you browse.
+- **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** Synced lyrics appear in a resizable side panel. Click a line to seek, or keep browsing while the song continues.
 - **Keep listening.** Build a playback queue, move between tracks, and reopen the app with the server connection remembered securely.
 - **See the album in the interface.** Artwork sets the palette, with smooth color changes, transitions and support for reduced motion.
@@ -68,6 +68,8 @@ Albums are grouped by metadata rather than folder names. Consistent album, album
 
 Favorites, panel width and output preferences stay on the client. Lyrics use [LRCLIB](https://lrclib.net/), with no account or API key: opening the panel may send the track's title, artist, album and duration to the provider. Audio files and server credentials are not sent. Cached lyrics remain available offline; coverage depends on the recording.
 
+In Favorites, **Copy favorites** creates a portable list that another client can paste into **Import favorites**. Matching albums and tracks already in that client's library are saved locally. Use **Select** to add or remove favorites in bulk, or copy just a selection. See the [favorites guide](docs/favorites.md) for details.
+
 ## For contributors
 
 The server uses **Rust, Axum and SQLite**. The desktop uses **Tauri, React, TypeScript and Motion**, with a native mpv playback process.
@@ -76,4 +78,4 @@ See [development and testing](docs/development.md) for the repository layout, lo
 
 ## License
 
-Spatial's code is released under the [MIT License](LICENSE). The desktop includes [Inter](https://rsms.me/inter/) under its [SIL Open Font License](apps/desktop/public/fonts/OFL.txt). Bundled mpv and its dependencies retain their own licenses;
+Spatial's code is released under the [MIT License](LICENSE). The desktop includes [Inter](https://rsms.me/inter/) under its [SIL Open Font License](apps/desktop/public/fonts/OFL.txt). Bundled mpv and its dependencies retain their own licenses; see [binary distribution](docs/development.md#binary-distribution) before publishing installers.

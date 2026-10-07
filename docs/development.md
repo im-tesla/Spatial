@@ -62,7 +62,7 @@ To check passthrough selection and rejected PCM fallback using a compatible samp
 ./tools/verify-passthrough.ps1 -MediaFile 'path/to/atmos-sample.m4a'
 ```
 
-The script uses a null audio sink and a nonexistent Windows endpoint. Physical HDMI playback is documented separately in the [verification notes](ui-verification.md#physical-playback-verification). Codec-specific results and the tested hardware details remain to be recorded.
+The script uses a null audio sink and a nonexistent Windows endpoint. The project owner has also verified Atmos playback through a physical HDMI connection to an AVR. Codec-specific results and the tested hardware details remain to be recorded.
 
 The [build workflow](../.github/workflows/build.yml) defines Linux server and Windows desktop checks. Its Linux runner is currently Ubuntu 22.04; that is a CI target, not a required server installation or a complete compatibility matrix.
 
