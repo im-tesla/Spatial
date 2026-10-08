@@ -1,12 +1,13 @@
 use super::*;
 
-fn snapshot() -> Snapshot {
+pub(super) fn snapshot() -> Snapshot {
     Snapshot {
         enabled: true,
         track: Some(Metadata {
             id: "track".into(),
             title: "A quiet room".into(),
             artist: "Spatial".into(),
+            album_artist: "Spatial".into(),
             album: "Night Letters".into(),
             duration: 180.0,
         }),
@@ -39,6 +40,10 @@ fn listening_payload_has_music_metadata_and_millisecond_progress() {
     let listening = snapshot().listening().unwrap();
     let payload = activity(&listening, 1_000_000);
     assert_eq!(payload["type"], 2);
+    assert_eq!(payload["name"], "Spatial");
+    assert_eq!(payload["status_display_type"], 0);
+    assert_eq!(payload["assets"]["small_text"], "Listening on Spatial");
+    assert_eq!(payload["assets"]["large_image"], CONFIG.icon_url);
     assert_eq!(payload["details"], "A quiet room");
     assert_eq!(payload["state"], "Spatial");
     assert_eq!(
@@ -61,6 +66,101 @@ fn normal_progress_is_coalesced_but_seeks_and_track_changes_publish() {
     current = previous.clone();
     current.track.id = "new recording".into();
     assert!(changed(&current, &previous, Duration::ZERO));
+    current = previous.clone();
+    current.cover = Some(
+        "https://coverartarchive.org/release-group/c31a5e2b-0bf8-32e0-8aeb-ef4ba9973932/front-500"
+            .into(),
+    );
+    assert!(changed(&current, &previous, Duration::ZERO));
+    let payload = activity(&current, 1_000_000);
+    assert_eq!(payload["assets"]["large_image"], current.cover.unwrap());
+    assert_eq!(payload["assets"]["small_image"], CONFIG.icon_url);
+}
+
+#[tokio::test]
+async fn skipping_and_pause_resume_reuse_the_connection_and_publish_without_user_intervention() {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    let (stream, server_stream) = tokio::io::duplex(8192);
+    let (messages, mut received) = tokio::sync::mpsc::unbounded_channel();
+    let server = tokio::spawn(async move {
+        let mut peer = Ipc {
+            stream: server_stream,
+        };
+        assert_eq!(peer.read().await.unwrap().0, 0);
+        peer.write(1, br#"{"evt":"READY"}"#).await.unwrap();
+        while let Ok((opcode, data)) = peer.read().await {
+            assert_eq!(opcode, 1);
+            let request: Value = serde_json::from_slice(&data).unwrap();
+            peer.write(
+                1,
+                &serde_json::to_vec(&json!({ "nonce": request["nonce"] })).unwrap(),
+            )
+            .await
+            .unwrap();
+            messages.send(request["args"]["activity"].clone()).unwrap();
+        }
+    });
+    let connections = Arc::new(AtomicUsize::new(0));
+    let attempts = connections.clone();
+    let mut stream = Some(stream);
+    let (sender, receiver) = watch::channel(Snapshot::default());
+    let worker = tokio::spawn(run_with(receiver, artwork::Covers::offline(), move || {
+        attempts.fetch_add(1, Ordering::SeqCst);
+        let stream = stream.take();
+        async move {
+            let mut client = Ipc {
+                stream: stream.ok_or("Unexpected reconnect")?,
+            };
+            client.handshake(&CONFIG.application_id).await?;
+            Ok(client)
+        }
+    }));
+    tokio::time::timeout(Duration::from_secs(4), async {
+        let first = snapshot();
+        sender.send_replace(first.clone());
+        assert_eq!(received.recv().await.unwrap()["details"], "A quiet room");
+        // mpv stops the old process before starting the next track.
+        let mut gap = first.clone();
+        gap.track = None;
+        sender.send_replace(gap.clone());
+        assert!(received.recv().await.unwrap().is_null());
+        let mut second = first.clone();
+        second.track.as_mut().unwrap().id = "second".into();
+        second.track.as_mut().unwrap().title = "The next song".into();
+        second.playback.track_id = Some("second".into());
+        second.playback.position = 0.0;
+        sender.send_replace(second.clone());
+        assert_eq!(received.recv().await.unwrap()["details"], "The next song");
+        // Rapid skips may coalesce the clear and new-track snapshots.
+        sender.send_replace(gap);
+        let mut third = second.clone();
+        third.track.as_mut().unwrap().id = "third".into();
+        third.track.as_mut().unwrap().title = "Third song".into();
+        third.playback.track_id = Some("third".into());
+        sender.send_replace(third.clone());
+        let mut message = received.recv().await.unwrap();
+        if message.is_null() {
+            message = received.recv().await.unwrap();
+        }
+        assert_eq!(message["details"], "Third song");
+        let mut paused = third.clone();
+        paused.playback.paused = true;
+        sender.send_replace(paused);
+        assert!(received.recv().await.unwrap().is_null());
+        sender.send_replace(third.clone());
+        assert_eq!(received.recv().await.unwrap()["details"], "Third song");
+        third.shutdown = true;
+        sender.send_replace(third);
+        assert!(received.recv().await.unwrap().is_null());
+        worker.await.unwrap();
+        server.await.unwrap();
+    })
+    .await
+    .unwrap();
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
 }
 #[test]
 fn metadata_is_bounded_without_splitting_unicode_and_empty_values_have_fallbacks() {

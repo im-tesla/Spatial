@@ -31,7 +31,7 @@ export function useDiscordPreferences() {
 }
 export default function DiscordSettings({ preferences }: { preferences: ReturnType<typeof useDiscordPreferences> }) {
   return <section className="preference-section" aria-labelledby="discord-heading">
-    <div className="preference-row"><div><h3 id="discord-heading">Discord activity</h3><p>Share the track and artist while listening.</p></div>
+    <div className="preference-row"><div><h3 id="discord-heading">Discord activity</h3><p>Share the track, artist and artwork while listening.</p></div>
       <button type="button" className={`preference-switch ${preferences.enabled ? "enabled" : ""}`} role="switch"
         aria-checked={preferences.enabled} aria-label="Share listening activity on Discord" disabled={!preferences.configured || preferences.busy}
         onClick={() => void preferences.toggle()}><span /></button>

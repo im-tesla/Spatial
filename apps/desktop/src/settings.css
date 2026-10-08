@@ -1,7 +1,6 @@
 .sidebar-actions { display: flex; justify-content: space-between; align-items: center; }
 .settings-actions { justify-content: flex-end; }
 .sidebar-actions .icon-button { padding: 7px; color: var(--muted); }
-.brand > img { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }
 .preference-section { margin: 26px 0 16px; }
 .preference-row { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
 .preference-row h3 { margin: 0 0 7px; font-size: 15px; font-weight: 550; letter-spacing: -.2px; }

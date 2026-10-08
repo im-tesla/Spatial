@@ -423,7 +423,7 @@ function AppContent() {
     <div className="connect-art"><div className="orbital orbital-one" /><div className="orbital orbital-two" /><div className="orbital orbital-three" />
       <div className="connect-message"><span className="eyebrow">A DIFFERENT KIND OF LISTENING</span><h1>Music with<br />room to move.</h1><p>Your collection. Every dimension.<br />Straight to your receiver.</p></div>
     </div>
-    <section className="connect-panel"><div className="brand"><img src="/spatial-mark.png" alt="" /><span>spatial<span className="brand-dot">.</span></span></div>
+    <section className="connect-panel"><div className="brand"><span>spatial<span className="brand-dot">.</span></span></div>
       <div className="connect-form-wrap"><span className="eyebrow">WELCOME</span><h2>Connect your library</h2><p>{restoring ? "Opening your saved library…" : canUseSaved ? "Reconnect using your saved access token." : "Enter the server address and access token."}</p>
         <form onSubmit={connect}><label>Server address<input autoFocus type="url" placeholder="https://spatial.example.com" value={address} onChange={e => setAddress(e.target.value)} disabled={busy || restoring} required /></label>
           {!restoring && !canUseSaved && <label>Access token<input type="password" autoComplete="off" placeholder="Enter access token" value={token} onChange={e => setToken(e.target.value)} disabled={busy} required /></label>}
@@ -438,7 +438,7 @@ function AppContent() {
 
   return <motion.div className={`app-shell ${lyricsOpen ? "lyrics-open" : ""}`} data-reduced-motion={reduced ? "true" : undefined} style={{ ...theme, "--lyrics-width": `${panelWidth}px`, "--lyrics-space": lyricsOpen ? `${panelWidth}px` : "0px" } as CSSProperties}
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .4, ease }}>
-    <aside className="sidebar"><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><img src="/spatial-mark.png" alt="" /><span>spatial<span className="brand-dot">.</span></span></button>
+    <aside className="sidebar"><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><span>spatial<span className="brand-dot">.</span></span></button>
       <span className="nav-label">YOUR COLLECTION</span><nav>
         <NavItem active={view === "albums"} onClick={() => { setView("albums"); setSelectedAlbum(null); setSearch(""); }}><LibraryBig size={19} /> Albums <span>{catalog.albums.length}</span></NavItem>
         <NavItem active={view === "tracks"} onClick={() => { setView("tracks"); setSelectedAlbum(null); setSearch(""); }}><ListMusic size={19} /> All tracks <span>{catalog.tracks.length}</span></NavItem>

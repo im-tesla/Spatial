@@ -18,7 +18,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** Synced lyrics appear in a resizable side panel. Click a line to seek, or keep browsing while the song continues.
 - **Keep listening.** Build a playback queue, move between tracks, and reopen the app with the server connection remembered securely.
-- **Share your listening.** Optional [Discord activity](docs/discord.md) shows the current track and playback progress.
+- **Share your listening.** [Discord activity](docs/discord.md) shows the current track, public album artwork and playback progress. Enabled by default, with a saved opt-out.
 - **See the album in the interface.** Artwork sets the palette, with smooth color changes, transitions and support for reduced motion.
 
 ## A closer look

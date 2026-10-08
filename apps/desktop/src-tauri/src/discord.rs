@@ -6,11 +6,12 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::{Mutex, watch};
+mod artwork;
 
 #[derive(Deserialize)]
 struct Configuration {
     application_id: String,
-    asset_key: String,
+    icon_url: String,
 }
 static CONFIG: LazyLock<Configuration> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../../../../config/discord.json"))
@@ -29,6 +30,7 @@ struct Metadata {
     id: String,
     title: String,
     artist: String,
+    album_artist: String,
     album: String,
     duration: f64,
 }
@@ -37,6 +39,7 @@ struct Listening {
     track: Metadata,
     position: f64,
     duration: f64,
+    cover: Option<String>,
 }
 impl Snapshot {
     fn listening(&self) -> Option<Listening> {
@@ -65,6 +68,7 @@ impl Snapshot {
             track: track.clone(),
             position,
             duration,
+            cover: None,
         })
     }
 }
@@ -86,10 +90,14 @@ fn text(value: &str, fallback: &str) -> String {
 }
 fn activity(listening: &Listening, now_ms: i64) -> Value {
     let mut activity = json!({
-        "type": 2, "name": "Spatial",
+        "type": 2, "name": "Spatial", "status_display_type": 0,
         "details": text(&listening.track.title, "Unknown track"),
         "state": text(&listening.track.artist, "Unknown artist"),
-        "assets": { "large_image": CONFIG.asset_key, "large_text": text(&listening.track.album, "Spatial") }
+        "assets": {
+            "large_image": listening.cover.as_deref().unwrap_or(&CONFIG.icon_url),
+            "large_text": text(&listening.track.album, "Spatial"),
+            "small_image": CONFIG.icon_url, "small_text": "Listening on Spatial"
+        }
     });
     if listening.duration.is_finite() && listening.duration > 0.0 {
         let duration = listening.duration.min(30.0 * 86400.0);
@@ -101,6 +109,7 @@ fn activity(listening: &Listening, now_ms: i64) -> Value {
 }
 fn changed(current: &Listening, previous: &Listening, elapsed: Duration) -> bool {
     current.track != previous.track
+        || current.cover != previous.cover
         || current.duration != previous.duration
         || (current.position - previous.position - elapsed.as_secs_f64()).abs() > 2.0
 }
@@ -143,6 +152,7 @@ impl Presence {
                 id: track.id.clone(),
                 title: track.title.clone(),
                 artist: track.artist.clone(),
+                album_artist: track.album_artist.clone(),
                 album: track.album.clone(),
                 duration: track.duration,
             });
@@ -265,21 +275,41 @@ async fn connect() -> Result<Ipc<tokio::net::windows::named_pipe::NamedPipeClien
     Err("Discord is not running".into())
 }
 #[cfg(windows)]
-async fn run(mut receiver: watch::Receiver<Snapshot>) {
-    let mut client: Option<Ipc<tokio::net::windows::named_pipe::NamedPipeClient>> = None;
+async fn run(receiver: watch::Receiver<Snapshot>) {
+    run_with(receiver, artwork::Covers::new(), connect).await;
+}
+#[cfg(any(windows, test))]
+async fn run_with<S, Open, Connecting>(
+    mut receiver: watch::Receiver<Snapshot>,
+    mut covers: artwork::Covers,
+    mut open: Open,
+) where
+    S: AsyncRead + AsyncWrite + Unpin,
+    Open: FnMut() -> Connecting,
+    Connecting: std::future::Future<Output = Result<Ipc<S>, String>>,
+{
+    let mut client: Option<Ipc<S>> = None;
     let mut sent: Option<(Listening, Instant)> = None;
     let mut retry = Instant::now();
     let mut tick = tokio::time::interval(Duration::from_secs(2));
     loop {
         tokio::select! {
+            result = covers.ready() => covers.complete(result),
             result = receiver.changed() => if result.is_err() { break; },
             _ = tick.tick() => {},
         }
         let state = receiver.borrow_and_update().clone();
         if state.listening().is_none() {
-            if let Some(mut connection) = client.take() {
-                let _ =
+            covers.cancel();
+            if sent.is_some()
+                && let Some(connection) = client.as_mut()
+            {
+                let result =
                     tokio::time::timeout(Duration::from_secs(2), connection.publish(None)).await;
+                if !matches!(result, Ok(Ok(()))) {
+                    client = None;
+                    retry = Instant::now() + Duration::from_secs(10);
+                }
             }
             sent = None;
             if state.shutdown {
@@ -294,7 +324,7 @@ async fn run(mut receiver: watch::Receiver<Snapshot>) {
             if Instant::now() < retry {
                 continue;
             }
-            match tokio::time::timeout(Duration::from_secs(2), connect()).await {
+            match tokio::time::timeout(Duration::from_secs(2), open()).await {
                 Ok(Ok(connection)) => {
                     client = Some(connection);
                     sent = None;
@@ -305,9 +335,10 @@ async fn run(mut receiver: watch::Receiver<Snapshot>) {
                 }
             }
         }
-        let Some(listening) = receiver.borrow().listening() else {
+        let Some(mut listening) = receiver.borrow().listening() else {
             continue;
         };
+        listening.cover = covers.image(&listening.track);
         if sent.as_ref().is_some_and(|(previous, when)| {
             !changed(&listening, previous, when.elapsed())
                 && when.elapsed() < Duration::from_secs(15)
@@ -335,6 +366,7 @@ async fn run(mut receiver: watch::Receiver<Snapshot>) {
             retry = Instant::now() + Duration::from_secs(10);
         }
     }
+    covers.cancel();
 }
 #[cfg(not(windows))]
 async fn run(mut receiver: watch::Receiver<Snapshot>) {
