@@ -1,0 +1,15 @@
+.sidebar-actions { display: flex; justify-content: space-between; align-items: center; }
+.settings-actions { justify-content: flex-end; }
+.sidebar-actions .icon-button { padding: 7px; color: var(--muted); }
+.brand > img { width: 32px; height: 32px; object-fit: contain; flex-shrink: 0; }
+.preference-section { margin: 26px 0 16px; }
+.preference-row { display: flex; gap: 24px; align-items: center; justify-content: space-between; }
+.preference-row h3 { margin: 0 0 7px; font-size: 15px; font-weight: 550; letter-spacing: -.2px; }
+.preference-row p, .preference-note { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.preference-note { margin-top: 16px; }
+.preference-switch { display: flex; align-items: center; width: 40px; height: 24px; flex-shrink: 0; padding: 3px; border-radius: 999px; background: var(--strong-line); transition: background .22s ease; }
+.preference-switch > span { width: 18px; height: 18px; border-radius: 50%; background: var(--text); transform: translateX(0); transition: transform .22s cubic-bezier(.2,.8,.2,1), background .22s ease; }
+.preference-switch.enabled { background: var(--accent); }
+.preference-switch.enabled > span { transform: translateX(16px); background: var(--base); }
+.preference-switch:disabled { opacity: .5; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .preference-switch, .preference-switch > span { transition: none; } }

@@ -103,6 +103,8 @@ mod platform {
     mod tests {
         use super::*;
         use windows_sys::Win32::Security::Credentials::CredDeleteW;
+        // WinCred is process-external state; keep credential writes/deletes sequential.
+        static CREDENTIAL_TESTS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
         struct TestCredential(String);
         impl TestCredential {
@@ -118,6 +120,7 @@ mod platform {
 
         #[test]
         fn credential_round_trip_overwrite_and_missing() {
+            let _guard = CREDENTIAL_TESTS.lock().unwrap();
             let target = TestCredential::new();
             assert!(load(&target.0).unwrap().is_none());
             let original = SavedConnection {
@@ -140,6 +143,7 @@ mod platform {
 
         #[test]
         fn oversized_credential_preserves_previous_value() {
+            let _guard = CREDENTIAL_TESTS.lock().unwrap();
             let target = TestCredential::new();
             let original = SavedConnection {
                 address: "http://localhost:8787".into(),

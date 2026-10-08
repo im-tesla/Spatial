@@ -54,6 +54,8 @@ const library: Library = { revision: 1, albums, tracks };
 const connectionScenario = new URLSearchParams(location.search).get("connection");
 const updateScenario = new URLSearchParams(location.search).get("updates");
 let restoreCalls = 0;
+let discordEnabled = false;
+const previewUpdateVersion = appPackage.version.replace(/\d+$/, patch => String(Number(patch) + 1));
 const covers = new Map<string, string>();
 for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fixture-orange", "#b56937", "#292025"],
   ["fixture-blue", "#407788", "#101e2b"], ["fixture-rose", "#a44b6c", "#251629"]]) {
@@ -82,9 +84,11 @@ let status: PlaybackStatus = { track_id: null, active: false, paused: false, end
   passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "discord_configuration") return { configured: true, enabled: discordEnabled };
+  if (command === "configure_discord") { discordEnabled = payload.enabled === true; return { configured: true, enabled: discordEnabled }; }
   if (command === "plugin:updater|check") {
     if (updateScenario === "offline") throw new Error("Simulated offline release feed");
-    return updateScenario === "current" ? null : { rid: 99, currentVersion: appPackage.version, version: "0.1.4", rawJson: {} };
+    return updateScenario === "current" ? null : { rid: 99, currentVersion: appPackage.version, version: previewUpdateVersion, rawJson: {} };
   }
   if (command === "plugin:updater|download") {
     const channel = payload.onEvent;

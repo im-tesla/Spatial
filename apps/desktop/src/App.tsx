@@ -3,13 +3,14 @@ import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { DialogTransition, ease, LyricsSlot, PageTransition, spring } from "./motion";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Headphones, Heart, Layers3, LibraryBig,
-  ListMusic, LoaderCircle, Mic2, Pause, Play, Radio, Repeat, Repeat1, Search, Shuffle, SkipBack,
+  ListMusic, LoaderCircle, Mic2, Pause, Play, Repeat, Repeat1, Search, Settings2, Shuffle, SkipBack,
   SkipForward, Speaker, Volume2, Waves, X } from "lucide-react";
 import { call, native, onEvent } from "./api";
 import { emptyFavorites, loadFavorites, saveFavorites } from "./favorites";
 import type { Favorites } from "./favorites";
 import CollectionTools from "./CollectionTools";
 import UpdateStatus from "./UpdateStatus";
+import DiscordSettings, { useDiscordPreferences } from "./DiscordSettings";
 import { getArtwork } from "./artwork";
 import LyricsSidebar from "./LyricsSidebar";
 import { clampLyricsWidth, loadLyricsWidth, maxLyricsWidth } from "./lyricsLayout";
@@ -78,6 +79,7 @@ function shuffleList<T>(items: T[]): T[] {
 
 function AppContent() {
   const reduced = useReducedMotion();
+  const discordPreferences = useDiscordPreferences();
   const [catalog, setCatalog] = useState<Library | null>(null);
   const [address, setAddress] = useState(localStorage.getItem("spatial-server") || (native ? "" : "http://127.0.0.1:8787"));
   const [token, setToken] = useState("");
@@ -93,7 +95,7 @@ function AppContent() {
   const [selection, setSelection] = useState<Favorites>(emptyFavorites);
   const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
   const [search, setSearch] = useState("");
-  const [modal, setModal] = useState<"output" | null>(null);
+  const [modal, setModal] = useState<"output" | "settings" | null>(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsWidth, setLyricsWidth] = useState(loadLyricsWidth);
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
@@ -421,7 +423,7 @@ function AppContent() {
     <div className="connect-art"><div className="orbital orbital-one" /><div className="orbital orbital-two" /><div className="orbital orbital-three" />
       <div className="connect-message"><span className="eyebrow">A DIFFERENT KIND OF LISTENING</span><h1>Music with<br />room to move.</h1><p>Your collection. Every dimension.<br />Straight to your receiver.</p></div>
     </div>
-    <section className="connect-panel"><div className="brand"><Radio /><span>spatial<span className="brand-dot">.</span></span></div>
+    <section className="connect-panel"><div className="brand"><img src="/spatial-mark.png" alt="" /><span>spatial<span className="brand-dot">.</span></span></div>
       <div className="connect-form-wrap"><span className="eyebrow">WELCOME</span><h2>Connect your library</h2><p>{restoring ? "Opening your saved library…" : canUseSaved ? "Reconnect using your saved access token." : "Enter the server address and access token."}</p>
         <form onSubmit={connect}><label>Server address<input autoFocus type="url" placeholder="https://spatial.example.com" value={address} onChange={e => setAddress(e.target.value)} disabled={busy || restoring} required /></label>
           {!restoring && !canUseSaved && <label>Access token<input type="password" autoComplete="off" placeholder="Enter access token" value={token} onChange={e => setToken(e.target.value)} disabled={busy} required /></label>}
@@ -436,7 +438,7 @@ function AppContent() {
 
   return <motion.div className={`app-shell ${lyricsOpen ? "lyrics-open" : ""}`} data-reduced-motion={reduced ? "true" : undefined} style={{ ...theme, "--lyrics-width": `${panelWidth}px`, "--lyrics-space": lyricsOpen ? `${panelWidth}px` : "0px" } as CSSProperties}
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .4, ease }}>
-    <aside className="sidebar"><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><Radio /><span>spatial<span className="brand-dot">.</span></span></button>
+    <aside className="sidebar"><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><img src="/spatial-mark.png" alt="" /><span>spatial<span className="brand-dot">.</span></span></button>
       <span className="nav-label">YOUR COLLECTION</span><nav>
         <NavItem active={view === "albums"} onClick={() => { setView("albums"); setSelectedAlbum(null); setSearch(""); }}><LibraryBig size={19} /> Albums <span>{catalog.albums.length}</span></NavItem>
         <NavItem active={view === "tracks"} onClick={() => { setView("tracks"); setSelectedAlbum(null); setSearch(""); }}><ListMusic size={19} /> All tracks <span>{catalog.tracks.length}</span></NavItem>
@@ -446,7 +448,7 @@ function AppContent() {
       </nav><div className="sidebar-note"><Waves size={22} /><p>More than sound.<br /><strong>A sense of space.</strong></p></div>
       <div className="sidebar-bottom"><button className="output-card" onClick={() => setModal("output")}><Speaker size={19} /><span>OUTPUT DEVICE<strong>{selectedDevice}</strong></span><ChevronDown size={13} /></button>
         <div className="server-state"><span className={`status-dot ${connection !== "connected" ? "amber" : ""}`} /><span>{connection === "connected" ? "Server Connected" : "Reconnecting to server…"}</span></div>
-        <button className="text-button" onClick={async () => { await action("disconnect_server"); setRememberedAddress(null); setCatalog(null); setQueue([]); setQueueIndex(-1); setStatus(emptyStatus); setError(""); setSelectedAlbum(null); setLyricsOpen(false); }}>Change server</button>
+        <div className="sidebar-actions"><button className="text-button" onClick={async () => { await action("disconnect_server"); setRememberedAddress(null); setCatalog(null); setQueue([]); setQueueIndex(-1); setStatus(emptyStatus); setError(""); setSelectedAlbum(null); setLyricsOpen(false); }}>Change server</button><button className="icon-button" aria-label="Open settings" title="Settings" onClick={() => setModal("settings")}><Settings2 size={16} /></button></div>
         <UpdateStatus />
       </div>
     </aside>
@@ -505,7 +507,8 @@ function AppContent() {
         <div className="progress"><span>{time(seekPosition ?? status.position)}</span><input aria-label="Playback position" aria-valuetext={`${time(seekPosition ?? status.position)} of ${time(status.duration || current?.duration || 0)}`} style={{ "--seek-fill": `${seekFill}%` } as CSSProperties} type="range" min={0} max={status.duration || current?.duration || 1} step={0.1} value={seekPosition ?? status.position} disabled={!status.active || starting} onChange={e => setSeekPosition(Number(e.target.value))} onPointerUp={e => commitSeek(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commitSeek(Number(e.currentTarget.value)); }} /><span>{time(status.duration || current?.duration || 0)}</span></div>
       </div><div className="player-details"><button ref={lyricsToggleRef} className={`icon-button ${lyricsOpen ? "is-active" : ""}`} aria-label={lyricsOpen ? "Close lyrics" : "Open lyrics"} aria-pressed={lyricsOpen} aria-controls="lyrics-sidebar" onClick={() => { setLyricsOpen(open => !open); }}><Mic2 size={18} /></button><button className="icon-button" aria-label="Receiver output settings" title="Control volume on your receiver" onClick={() => setModal("output")}><Volume2 size={18} /></button><button className={`icon-button ${view === "queue" ? "is-active" : ""}`} aria-label="Open queue" onClick={openQueue}><ListMusic size={19} /></button></div>
     </footer>
-    <AnimatePresence>{modal && <DialogTransition key="output" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><div><span className="eyebrow">DIRECT TO YOUR RECEIVER</span><h2 id="modal-title">Audio output</h2></div><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div>
+    <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
+    {modal === "output" && <DialogTransition key="output" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><div><span className="eyebrow">DIRECT TO YOUR RECEIVER</span><h2 id="modal-title">Audio output</h2></div><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div>
       <p className="modal-description">Select the Windows HDMI endpoint connected to your Atmos receiver. Spatial requests exclusive Dolby passthrough.</p><div className="output-mode"><Layers3 size={20} /><div><strong>Original Dolby bitstream</strong><span>E-AC-3 / TrueHD · receiver controls volume</span></div><span className="mode-pill">EXCLUSIVE</span></div>
         {loadingDevices ? <div className="loading"><LoaderCircle className="spin" size={20} /> Finding audio endpoints…</div> : devices.map(item => <button className={`device-option ${device === item.name ? "selected" : ""}`} key={item.name} onClick={async () => { if (status.active && item.name !== device) { await action("stop_playback"); setStatus(emptyStatus); } setDevice(item.name); localStorage.setItem("spatial-output", item.name); setError(""); }}><Speaker size={20} /><span>{item.description}</span>{device === item.name && <Check size={19} />}</button>)}
         {devicesError && <div className="form-error">{devicesError}</div>}{!loadingDevices && !devices.length && !devicesError && <div className="empty-state"><Speaker size={30} /><p>{native ? "No Windows audio endpoints were found. Connect and switch on your receiver, then refresh." : "Audio endpoint selection is available in the Windows desktop application."}</p></div>}
