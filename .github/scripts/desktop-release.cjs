@@ -27,8 +27,14 @@ function planRelease(version, requestedTag, releases) {
   if (published.some(release => versionOf(release.tag_name) && compare(versionOf(release.tag_name), version) > 0)) throw new Error('This version is older than an existing stable release. Bump the version before publishing.');
   return { publish: true, tag: requestedTag || `v${version}`, version };
 }
-function validateManifest(manifest, version, installerUrl, signature) {
-  const windows = manifest.platforms?.['windows-x86_64'] || manifest.platforms?.['windows-x86_64-nsis'];
-  if (manifest.version !== version || windows?.url !== installerUrl || windows?.signature?.trim() !== signature.trim()) throw new Error('The updater manifest must reference the verified Windows installer, its exact signature and version.');
+function validateManifest(manifest, version, installerUrls, signature) {
+  if (manifest.version !== version) throw new Error(`Updater manifest version ${manifest.version} does not match ${version}.`);
+  const urls = Array.isArray(installerUrls) ? installerUrls : [installerUrls];
+  const windows = ['windows-x86_64', 'windows-x86_64-nsis'].map(platform => manifest.platforms?.[platform]).filter(Boolean);
+  if (!windows.length) throw new Error('Updater manifest has no Windows x64 installer.');
+  for (const entry of windows) {
+    if (!urls.includes(entry.url)) throw new Error('Updater manifest URL does not identify the verified release asset.');
+    if (typeof entry.signature !== 'string' || entry.signature.trim() !== signature.trim()) throw new Error('Updater manifest signature does not match the verified installer.');
+  }
 }
 module.exports = { readVersion, planRelease, validateManifest };

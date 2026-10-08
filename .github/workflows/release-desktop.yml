@@ -149,6 +149,6 @@ jobs:
             const { data } = await github.rest.repos.getReleaseAsset({ ...context.repo, asset_id: manifestAsset.id, headers: { accept: 'application/octet-stream' } });
             const manifest = JSON.parse(typeof data === 'string' ? data : Buffer.from(data).toString('utf8'));
             const localSignature = fs.readFileSync(`target/release/bundle/nsis/${installerName}.sig`, 'utf8');
-            validateManifest(manifest, version, installer.browser_download_url, localSignature);
+            validateManifest(manifest, version, [installer.browser_download_url, installer.url], localSignature);
             const { data: published } = await github.rest.repos.updateRelease({ ...context.repo, release_id, draft: false, prerelease: false, make_latest: 'true' });
             await core.summary.addLink(`Spatial ${version} is published`, published.html_url).write();
