@@ -28,10 +28,22 @@ Get-Content config/private/updater.password -Raw | gh secret set TAURI_SIGNING_P
 
 ## Publish an update
 
-1. Bump the app version consistently in the Rust workspace, npm manifests and Tauri configuration. Use a new version rather than replacing an existing release.
-2. Commit the changes and push a matching stable tag, such as `v0.1.3`. Existing numeric tags are supported too. Alternatively, run **Prepare signed desktop release** manually with an existing matching tag.
-3. The workflow tests and builds a signed Windows installer and uploads the installer, its `.sig` and `latest.json` to a **draft** GitHub release.
-4. Review the draft, include the required bundled-player source and notices described in [binary distribution](development.md#binary-distribution), then publish it as the latest stable release.
+Run the version helper from the project root, then commit and push to `main`:
+
+```powershell
+node tools/set-version.mjs 0.1.4
+git add Cargo.toml Cargo.lock apps/desktop/package.json apps/desktop/package-lock.json apps/desktop/src-tauri/tauri.conf.json
+git commit -m "Release Spatial 0.1.4"
+git push origin main
+```
+
+The **Release desktop** workflow creates the matching `v0.1.4` tag and release automatically. It tests the desktop, builds and signs the Windows installer, uploads the installer, its `.sig` and `latest.json` to a draft, verifies the actual installer and manifest, then publishes the release as latest. A failed check leaves it unpublished. No personal access token is required; the workflow uses GitHub's built-in token with repository contents write permission.
+
+Pushes with an already published version skip the release build. Published numeric tags such as `0.1.2` and prefixed tags such as `v0.1.3` are treated as the same version. Published releases are never replaced, and an older version cannot become the latest release. Regular CI still runs on code pushes.
+
+Stable tag pushes are also supported. To retry a failed release, rerun its original Actions run. **Release desktop → Run workflow** accepts an optional existing stable tag; leave it empty to release the selected `main` commit. Tag, manifests and lockfile versions must agree.
+
+Before pushing a release version, complete the bundled-player source and notices described in [binary distribution](development.md#binary-distribution). Automatic publishing does not assemble the corresponding source for third-party dependencies.
 
 Draft and prerelease versions are not offered through the stable feed. Publishing the release makes it available to clients on their next check. Keep the signed installer and its exact signature together. The workflow has no server deployment step.
 

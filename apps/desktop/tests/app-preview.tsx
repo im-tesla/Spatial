@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import type { Library, PlaybackStatus, Track } from "../src/types";
+import appPackage from "../package.json";
 import "../src/styles.css";
 
 Object.assign(window, { isTauri: true });
@@ -83,7 +84,7 @@ mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
   if (command === "plugin:updater|check") {
     if (updateScenario === "offline") throw new Error("Simulated offline release feed");
-    return updateScenario === "current" ? null : { rid: 99, currentVersion: "0.1.2", version: "0.1.3", rawJson: {} };
+    return updateScenario === "current" ? null : { rid: 99, currentVersion: appPackage.version, version: "0.1.4", rawJson: {} };
   }
   if (command === "plugin:updater|download") {
     const channel = payload.onEvent;

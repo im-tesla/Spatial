@@ -1,12 +1,13 @@
-name: Prepare signed desktop release
+name: Release desktop
 on:
   push:
+    branches: [main]
     tags: ['v[0-9]*', '[0-9]*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing stable release tag matching the app version (for example v0.1.3)
-        required: true
+        description: Optional existing stable tag; leave empty to release the selected main commit
+        required: false
         type: string
 
 permissions:
@@ -16,17 +17,54 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  signed-windows:
+  plan:
     if: github.repository == 'im-tesla/Spatial'
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    env:
-      SPATIAL_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.release.outputs.publish }}
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      commit: ${{ steps.release.outputs.commit }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ inputs.tag || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test .github/scripts/desktop-release.test.cjs
+      - name: Skip published versions and select the release tag
+        id: release
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_TAG: ${{ inputs.tag || (github.ref_type == 'tag' && github.ref_name) || '' }}
+        with:
+          script: |
+            const { readVersion, planRelease } = require('./.github/scripts/desktop-release.cjs');
+            const commit = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+            const releases = await github.paginate(github.rest.repos.listReleases, context.repo);
+            const plan = planRelease(readVersion(), process.env.REQUESTED_TAG, releases);
+            if (plan.publish) {
+              try {
+                await github.rest.git.getRef({ ...context.repo, ref: `tags/${plan.tag}` });
+                const { data: tagCommit } = await github.rest.repos.getCommit({ ...context.repo, ref: plan.tag });
+                if (tagCommit.sha !== commit) throw new Error('The version tag already points to another commit. Bump the version or rerun the original release.');
+              } catch (error) { if (error.status !== 404) throw error; }
+            }
+            for (const [key, value] of Object.entries(plan)) core.setOutput(key, String(value));
+            core.setOutput('commit', commit);
+            core.info(plan.publish ? `Release ${plan.tag} will be built.` : `Version ${plan.version} is already published; no release needed.`);
+
+  signed-windows:
+    needs: plan
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v4
         with:
@@ -34,20 +72,13 @@ jobs:
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
       - uses: Swatinem/rust-cache@v2
-      - name: Validate release version and signing configuration
+      - name: Validate signing secrets
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          $ErrorActionPreference = 'Stop'
-          if ($env:SPATIAL_RELEASE_TAG -notmatch '^v?(\d+\.\d+\.\d+)$') { throw 'Use a stable version tag.' }
-          $version = $Matches[1]
-          $package = Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json
-          $tauri = Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
-          $workspaceVersion = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
-          if ($version -ne $package.version -or $version -ne $tauri.version -or $version -ne $workspaceVersion) { throw 'Tag and app versions must match.' }
-          if (-not $env:TAURI_SIGNING_PRIVATE_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { throw 'Configure the repository signing secrets before releasing.' }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { throw 'Add TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD as repository Secrets, not Variables.' }
       - name: Set up playback engine and test desktop
         shell: pwsh
         run: |
@@ -60,7 +91,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked -p spatial-desktop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Build signed installer and updater manifest in a draft release
+      - name: Build signed installer and upload draft assets
+        id: build
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,16 +101,42 @@ jobs:
         with:
           projectPath: apps/desktop
           args: --config src-tauri/tauri.release.conf.json -- --locked
-          tagName: ${{ env.SPATIAL_RELEASE_TAG }}
-          releaseName: Spatial ${{ env.SPATIAL_RELEASE_TAG }}
+          tagName: ${{ needs.plan.outputs.tag }}
+          releaseCommitish: ${{ needs.plan.outputs.commit }}
+          releaseName: Spatial ${{ needs.plan.outputs.version }}
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
           generateReleaseNotes: true
       - name: Verify the built installer against the client key
         shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
         run: |
-          $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
-          $env:SPATIAL_UPDATE_INSTALLER = Join-Path (Get-Location) "target/release/bundle/nsis/Spatial_${version}_x64-setup.exe"
+          $env:SPATIAL_UPDATE_INSTALLER = Join-Path (Get-Location) "target/release/bundle/nsis/Spatial_$($env:RELEASE_VERSION)_x64-setup.exe"
           cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify updater manifest and publish release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.build.outputs.releaseId }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const { validateManifest } = require('./.github/scripts/desktop-release.cjs');
+            const release_id = Number(process.env.RELEASE_ID);
+            const version = process.env.RELEASE_VERSION;
+            const { data: release } = await github.rest.repos.getRelease({ ...context.repo, release_id });
+            if (!release.draft) throw new Error('The release must remain a draft until verification succeeds.');
+            const installerName = `Spatial_${version}_x64-setup.exe`;
+            const installer = release.assets.find(asset => asset.name === installerName && asset.state === 'uploaded');
+            const signature = release.assets.find(asset => asset.name === `${installerName}.sig` && asset.state === 'uploaded');
+            const manifestAsset = release.assets.find(asset => asset.name === 'latest.json' && asset.state === 'uploaded');
+            if (!installer || !signature || !manifestAsset) throw new Error('Installer, signature and latest.json must all be uploaded before publishing.');
+            const { data } = await github.rest.repos.getReleaseAsset({ ...context.repo, asset_id: manifestAsset.id, headers: { accept: 'application/octet-stream' } });
+            const manifest = JSON.parse(typeof data === 'string' ? data : Buffer.from(data).toString('utf8'));
+            const localSignature = fs.readFileSync(`target/release/bundle/nsis/${installerName}.sig`, 'utf8');
+            validateManifest(manifest, version, installer.browser_download_url, localSignature);
+            const { data: published } = await github.rest.repos.updateRelease({ ...context.repo, release_id, draft: false, prerelease: false, make_latest: 'true' });
+            await core.summary.addLink(`Spatial ${version} is published`, published.html_url).write();

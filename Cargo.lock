@@ -4099,14 +4099,14 @@ dependencies = [
 
 [[package]]
 name = "spatial-core"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "spatial-desktop"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
@@ -4127,7 +4127,7 @@ dependencies = [
 
 [[package]]
 name = "spatial-server"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "axum",
