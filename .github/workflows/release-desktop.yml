@@ -79,6 +79,18 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           if (-not $env:TAURI_SIGNING_PRIVATE_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { throw 'Add TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD as repository Secrets, not Variables.' }
+      - name: Install and verify test media tools
+        shell: pwsh
+        run: |
+          choco install ffmpeg --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $taskChocolateyBin = Split-Path -Parent (Get-Command choco -ErrorAction Stop).Source
+          $env:Path = "$taskChocolateyBin;$env:Path"
+          $taskChocolateyBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          ffmpeg -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ffprobe -version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Set up playback engine and test desktop
         shell: pwsh
         run: |
