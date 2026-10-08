@@ -1,0 +1,84 @@
+name: Prepare signed desktop release
+on:
+  push:
+    tags: ['v[0-9]*', '[0-9]*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag matching the app version (for example v0.1.3)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: spatial-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  signed-windows:
+    if: github.repository == 'im-tesla/Spatial'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      SPATIAL_RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+      - name: Validate release version and signing configuration
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:SPATIAL_RELEASE_TAG -notmatch '^v?(\d+\.\d+\.\d+)$') { throw 'Use a stable version tag.' }
+          $version = $Matches[1]
+          $package = Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json
+          $tauri = Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json
+          $workspaceVersion = [regex]::Match((Get-Content Cargo.toml -Raw), '(?m)^version = "([^"]+)"').Groups[1].Value
+          if ($version -ne $package.version -or $version -ne $tauri.version -or $version -ne $workspaceVersion) { throw 'Tag and app versions must match.' }
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY -or -not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) { throw 'Configure the repository signing secrets before releasing.' }
+      - name: Set up playback engine and test desktop
+        shell: pwsh
+        run: |
+          ./tools/setup-mpv.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cd apps/desktop
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --locked -p spatial-desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build signed installer and updater manifest in a draft release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          args: --config src-tauri/tauri.release.conf.json -- --locked
+          tagName: ${{ env.SPATIAL_RELEASE_TAG }}
+          releaseName: Spatial ${{ env.SPATIAL_RELEASE_TAG }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          generateReleaseNotes: true
+      - name: Verify the built installer against the client key
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $env:SPATIAL_UPDATE_INSTALLER = Join-Path (Get-Location) "target/release/bundle/nsis/Spatial_${version}_x64-setup.exe"
+          cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

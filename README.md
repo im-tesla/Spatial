@@ -14,6 +14,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 - **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the Windows HDMI output, with source files served without transcoding.
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
+- **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “mixed by tesla” in their titles, regardless of capitalization.
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** Synced lyrics appear in a resizable side panel. Click a line to seek, or keep browsing while the song continues.
 - **Keep listening.** Build a playback queue, move between tracks, and reopen the app with the server connection remembered securely.
@@ -49,6 +50,8 @@ Spatial has two parts: a server that reads the music files and a desktop app tha
 3. **Connect and play.** Enter the server's reachable HTTP or HTTPS address and its access token. Choose the receiver's HDMI endpoint in Audio output, then play an album.
 
 The app remembers a successful connection in Windows Credential Manager and reconnects on launch. The server address is configurable; use the address that reaches your deployment.
+
+Windows clients automatically check for new releases and offer **Update and restart** when a signed update is available. See [desktop updates](docs/updates.md) for the one-time release setup and publishing workflow.
 
 Spatial runs natively. Docker is not required.
 

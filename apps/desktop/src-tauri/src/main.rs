@@ -2,6 +2,8 @@
 mod credentials;
 mod playback;
 mod server;
+#[cfg(test)]
+mod update_tests;
 
 use playback::{AudioDevice, PlaybackStatus, Player};
 use server::Session;
@@ -14,6 +16,7 @@ struct NativeState {
     session: Mutex<Option<Session>>,
     subscription: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     player: Mutex<Player>,
+    updating: Mutex<bool>,
 }
 
 async fn session(state: &NativeState) -> Result<Session, String> {
@@ -115,6 +118,10 @@ async fn play_track(
     device: String,
     state: State<'_, NativeState>,
 ) -> Result<(), String> {
+    let updating = state.updating.lock().await;
+    if *updating {
+        return Err("Spatial is restarting to install an update.".into());
+    }
     let (grant, url) = session(&state).await?.grant(&id).await?;
     let mut player = state.player.lock().await;
     let result = player.play(&url, &grant.track, &device).await;
@@ -146,9 +153,24 @@ async fn stop_playback(state: State<'_, NativeState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn prepare_update(state: State<'_, NativeState>) -> Result<(), String> {
+    let mut updating = state.updating.lock().await;
+    *updating = true;
+    state.player.lock().await.stop().await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_update(state: State<'_, NativeState>) -> Result<(), String> {
+    *state.updating.lock().await = false;
+    Ok(())
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(NativeState::default())
         .invoke_handler(tauri::generate_handler![
             connect_server,
@@ -161,7 +183,9 @@ fn main() {
             playback_status,
             toggle_pause,
             seek,
-            stop_playback
+            stop_playback,
+            prepare_update,
+            cancel_update
         ])
         .build(tauri::generate_context!())
         .expect("Cannot initialize Spatial");

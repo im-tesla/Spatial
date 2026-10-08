@@ -16,7 +16,7 @@ Matching ignores letter case and extra whitespace. Release year, duration and tr
 
 ## Manage several items
 
-Choose **Select** in Albums, All tracks, an album, Favorites or Play queue. Use the checkboxes or item titles to select items, then choose **Add to favorites** or **Remove from favorites**. **Select all** includes the currently visible search results. Changing the search or collection clears the selection.
+Choose **Select** in Albums, All tracks, Spatial Mixes, an album, Favorites or Play queue. Use the checkboxes or item titles to select items, then choose **Add to favorites** or **Remove from favorites**. **Select all** includes the currently visible search results. Changing the search or collection clears the selection.
 
 In Favorites, selecting items changes **Copy favorites** to **Copy selected**, so you can share a subset. **Done** returns to normal browsing and playback.
 

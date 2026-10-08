@@ -19,6 +19,8 @@ The setup script downloads a pinned mpv archive and checks its SHA-256 digest. T
 
 For native desktop development, use `npm run desktop:dev` instead of the build command. Connect to a configured Spatial server through the app.
 
+For signed update builds and the GitHub release workflow, see [desktop updates](updates.md). Ordinary development builds do not need the private signing key.
+
 ## Local server development
 
 Install FFmpeg/FFprobe on PATH; MediaInfo is recommended. Run the following from the repository root:

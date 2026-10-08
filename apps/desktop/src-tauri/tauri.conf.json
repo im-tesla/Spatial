@@ -10,18 +10,50 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Spatial", "width": 1280, "height": 850, "minWidth": 960, "minHeight": 680 }],
+    "windows": [
+      {
+        "title": "Spatial",
+        "width": 1280,
+        "height": 850,
+        "minWidth": 960,
+        "minHeight": 680
+      }
+    ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost https://lrclib.net; script-src 'self'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.png", "icons/icon.ico"],
-    "externalBin": ["binaries/mpv"],
-    "resources": ["binaries/mpv-license.txt", "binaries/mpv-source.txt", "binaries/mpv-GPL.txt", "binaries/mpv-LGPL.txt"],
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/mpv"
+    ],
+    "resources": [
+      "binaries/mpv-license.txt",
+      "binaries/mpv-source.txt",
+      "binaries/mpv-GPL.txt",
+      "binaries/mpv-LGPL.txt"
+    ],
     "shortDescription": "Atmos music, directly to your receiver",
     "category": "Music"
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/im-tesla/Spatial/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDgwNjFENTI0MEU4NzMxMDEKUldRQk1ZY09KTlZoZ0d2NW1LSEN2Tkx3aDgwU24zZWZod2xjdzdIOTRTVlhucFArcGQzanROSW8K",
+      "windows": {
+        "installMode": "passive"
+      },
+      "requireSignedVersion": true
+    }
   }
 }

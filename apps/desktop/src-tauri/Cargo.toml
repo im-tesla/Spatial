@@ -11,6 +11,7 @@ tauri-build = { version = "2", features = [] }
 spatial-core = { path = "../../../crates/core" }
 tauri = { version = "2", features = [] }
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
@@ -24,3 +25,4 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 
 [dev-dependencies]
 tempfile = "3"
+minisign-verify = "0.2.5"

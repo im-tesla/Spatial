@@ -39,12 +39,19 @@ if (showcase) {
     }));
   }
 }
+// Opt-in collection fixture includes title matches and an artist-only non-match.
+if (new URLSearchParams(location.search).has("mixes")) tracks.push(
+  { ...tracks[0], id: "fixture-mix-one", title: "A quiet room (Mixed by Tesla)" },
+  { ...tracks[1], id: "fixture-mix-two", title: "A little space — MIXED BY TESLA", artwork_id: "fixture-blue" },
+  { ...tracks[2], id: "fixture-not-a-mix", title: "Every note comes home", artist: "Mixed by Tesla" },
+);
 if (friendLibrary) {
   for (const album of albums) album.id = `friend-${album.id}`;
   for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
 }
 const library: Library = { revision: 1, albums, tracks };
 const connectionScenario = new URLSearchParams(location.search).get("connection");
+const updateScenario = new URLSearchParams(location.search).get("updates");
 let restoreCalls = 0;
 const covers = new Map<string, string>();
 for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fixture-orange", "#b56937", "#292025"],
@@ -74,6 +81,27 @@ let status: PlaybackStatus = { track_id: null, active: false, paused: false, end
   passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "plugin:updater|check") {
+    if (updateScenario === "offline") throw new Error("Simulated offline release feed");
+    return updateScenario === "current" ? null : { rid: 99, currentVersion: "0.1.2", version: "0.1.3", rawJson: {} };
+  }
+  if (command === "plugin:updater|download") {
+    const channel = payload.onEvent;
+    const callbackId = channel && typeof channel === "object" && "id" in channel ? Number(channel.id)
+      : Number(String(channel).replace("__CHANNEL__:", ""));
+    let messageIndex = 0;
+    const send = (message: unknown) => (window as unknown as { __TAURI_INTERNALS__: { runCallback: (id: number, message: unknown) => void } }).__TAURI_INTERNALS__.runCallback(callbackId, { message, index: messageIndex++ });
+    send({ event: "Started", data: { contentLength: 100 } });
+    send({ event: "Progress", data: { chunkLength: 50 } });
+    return new Promise((resolve, reject) => window.setTimeout(() => {
+      if (updateScenario === "bad-signature") { reject(new Error("Simulated invalid signature")); return; }
+      send({ event: "Progress", data: { chunkLength: 50 } }); send({ event: "Finished" }); resolve(100);
+    }, 900));
+  }
+  if (command === "prepare_update") { status = { ...status, active: false }; console.info("Fixture update prepared after download"); return; }
+  if (command === "cancel_update") { console.info("Fixture update failure unlocked playback"); return; }
+  if (command === "plugin:updater|install") throw new Error("Simulated installer failure; no software is installed");
+  if (command === "plugin:resources|close") return;
   if (command === "plugin:clipboard-manager|write_text") return navigator.clipboard.writeText(String(payload.text));
   if (command === "restore_server") {
     restoreCalls++;

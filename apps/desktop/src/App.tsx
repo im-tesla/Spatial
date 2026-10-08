@@ -9,6 +9,7 @@ import { call, native, onEvent } from "./api";
 import { emptyFavorites, loadFavorites, saveFavorites } from "./favorites";
 import type { Favorites } from "./favorites";
 import CollectionTools from "./CollectionTools";
+import UpdateStatus from "./UpdateStatus";
 import { getArtwork } from "./artwork";
 import LyricsSidebar from "./LyricsSidebar";
 import { clampLyricsWidth, loadLyricsWidth, maxLyricsWidth } from "./lyricsLayout";
@@ -86,7 +87,7 @@ function AppContent() {
   const restoreRequest = useRef<Promise<RememberedConnection | null> | null>(null);
   const [error, setError] = useState("");
   const [connection, setConnection] = useState("connected");
-  const [view, setView] = useState<"albums" | "tracks" | "favorites" | "queue">("albums");
+  const [view, setView] = useState<"albums" | "tracks" | "mixes" | "favorites" | "queue">("albums");
   const [favorites, setFavorites] = useState<Favorites>(emptyFavorites);
   const [selecting, setSelecting] = useState(false);
   const [selection, setSelection] = useState<Favorites>(emptyFavorites);
@@ -307,6 +308,7 @@ function AppContent() {
     .map((track, position) => ({ track, position })).filter(({ track }) =>
       (!selectedAlbum || track.album_id === selectedAlbum.id) &&
       (selectedAlbum || view !== "favorites" || favorites.tracks.includes(track.id)) &&
+      (selectedAlbum || view !== "mixes" || track.title.toLowerCase().includes("mixed by tesla")) &&
       `${track.title} ${track.artist} ${track.album}`.toLowerCase().includes(search.toLowerCase()));
   const filteredTracks = filteredTrackEntries.map(entry => entry.track);
   const playQueue = useCallback((tracks: Track[], index: number) => {
@@ -398,6 +400,7 @@ function AppContent() {
   const selected = selectedAlbum && (catalog?.albums.find(album => album.id === selectedAlbum.id) || selectedAlbum);
   const favoriteAlbumCount = catalog?.albums.filter(album => favorites.albums.includes(album.id)).length || 0;
   const favoriteTrackCount = catalog?.tracks.filter(track => favorites.tracks.includes(track.id)).length || 0;
+  const mixesCount = catalog?.tracks.filter(track => track.title.toLowerCase().includes("mixed by tesla")).length || 0;
   const themeArtwork = current ? current.artwork_id : selected ? selected.artwork_id : catalog?.albums.find(album => album.artwork_id)?.artwork_id;
   const theme = useArtworkTheme(catalog ? themeArtwork : null);
   const maximumLyricsWidth = maxLyricsWidth(viewportWidth);
@@ -426,6 +429,7 @@ function AppContent() {
           <button className="primary connect-button" disabled={busy || restoring}>{busy || restoring ? <LoaderCircle className="spin" size={18} /> : <ArrowRight size={18} />} {busy || restoring ? "Connecting…" : canUseSaved ? "Retry connection" : "Open my library"}</button>
           {canUseSaved && <button type="button" className="text-button" disabled={busy} onClick={() => { setRememberedAddress(null); setError(""); }}>Use another token</button>}
         </form><span className="connect-footnote"><Check size={14} /> {native ? "Access token is saved securely on this device." : "Access token stays in memory for this preview."}</span>
+        <UpdateStatus />
       </div>
     </section>
   </motion.main>;
@@ -436,12 +440,14 @@ function AppContent() {
       <span className="nav-label">YOUR COLLECTION</span><nav>
         <NavItem active={view === "albums"} onClick={() => { setView("albums"); setSelectedAlbum(null); setSearch(""); }}><LibraryBig size={19} /> Albums <span>{catalog.albums.length}</span></NavItem>
         <NavItem active={view === "tracks"} onClick={() => { setView("tracks"); setSelectedAlbum(null); setSearch(""); }}><ListMusic size={19} /> All tracks <span>{catalog.tracks.length}</span></NavItem>
+        <NavItem active={view === "mixes"} onClick={() => { setView("mixes"); setSelectedAlbum(null); setSearch(""); }}><Disc3 size={19} /> Spatial Mixes <span>{mixesCount}</span></NavItem>
         <NavItem active={view === "favorites"} onClick={() => { setView("favorites"); setSelectedAlbum(null); setSearch(""); }}><Heart size={19} /> Favorites <span>{favoriteAlbumCount + favoriteTrackCount}</span></NavItem>
         <NavItem active={view === "queue"} onClick={openQueue}><Layers3 size={19} /> Play queue <span>{queue.length}</span></NavItem>
       </nav><div className="sidebar-note"><Waves size={22} /><p>More than sound.<br /><strong>A sense of space.</strong></p></div>
       <div className="sidebar-bottom"><button className="output-card" onClick={() => setModal("output")}><Speaker size={19} /><span>OUTPUT DEVICE<strong>{selectedDevice}</strong></span><ChevronDown size={13} /></button>
         <div className="server-state"><span className={`status-dot ${connection !== "connected" ? "amber" : ""}`} /><span>{connection === "connected" ? "Server Connected" : "Reconnecting to server…"}</span></div>
         <button className="text-button" onClick={async () => { await action("disconnect_server"); setRememberedAddress(null); setCatalog(null); setQueue([]); setQueueIndex(-1); setStatus(emptyStatus); setError(""); setSelectedAlbum(null); setLyricsOpen(false); }}>Change server</button>
+        <UpdateStatus />
       </div>
     </aside>
     <main ref={mainRef} className="main-content"><header className="topbar">
@@ -454,7 +460,7 @@ function AppContent() {
         <section className="album-hero"><Cover id={selected.artwork_id} title={selected.title} /><div className="album-info"><span className="eyebrow">ALBUM {selected.atmos && <AtmosBadge />}</span><h1>{selected.title}</h1><p className="album-artist">{selected.artist}</p><p className="subtle">{year(selected.date)} <span>·</span> {selected.track_count} tracks <span>·</span> {Math.round(selected.duration / 60)} min</p>
           <div className="album-actions"><button className="primary" disabled={starting} onClick={() => playQueue(albumTracks, 0)}><Play size={16} fill="currentColor" /> Play album</button><button className="secondary" onClick={() => { if (!shuffle) { setShuffle(true); localStorage.setItem("spatial-shuffle", "true"); } playQueue(albumTracks, Math.floor(Math.random() * albumTracks.length)); }}><Shuffle size={16} /> Shuffle</button><FavoriteButton active={favorites.albums.includes(selected.id)} label={`album ${selected.title}`} onClick={() => toggleFavorite("albums", selected.id)} />{!selecting && collectionTools(true)}</div>
         </div></section>{selecting && collectionTools()}
-      </> : <section className="library-heading"><span className="eyebrow">{view === "queue" ? "THIS SESSION" : view === "favorites" ? "SAVED ON THIS DEVICE" : "LIBRARY"}</span><h1>{view === "queue" ? "Play queue" : view === "favorites" ? "Your favorites." : view === "albums" ? "Sound, in every dimension." : "Every track. All yours."}</h1><p>{view === "queue" ? <>{queue.length} tracks in your queue</> : view === "favorites" ? <>{favoriteAlbumCount} albums <span>·</span> {favoriteTrackCount} tracks</> : <>{catalog.albums.length} albums <span>·</span> {catalog.tracks.length} tracks <span>·</span> {catalog.tracks.filter(t => t.atmos).length} in Dolby Atmos</>}</p></section>}
+      </> : <section className="library-heading"><span className="eyebrow">{view === "queue" ? "THIS SESSION" : view === "favorites" ? "SAVED ON THIS DEVICE" : view === "mixes" ? "COLLECTION" : "LIBRARY"}</span><h1>{view === "queue" ? "Play queue" : view === "favorites" ? "Your favorites." : view === "mixes" ? "Spatial Mixes" : view === "albums" ? "Sound, in every dimension." : "Every track. All yours."}</h1><p>{view === "queue" ? <>{queue.length} tracks in your queue</> : view === "mixes" ? <>{mixesCount} {mixesCount === 1 ? "track" : "tracks"}</> : view === "favorites" ? <>{favoriteAlbumCount} albums <span>·</span> {favoriteTrackCount} tracks</> : <>{catalog.albums.length} albums <span>·</span> {catalog.tracks.length} tracks <span>·</span> {catalog.tracks.filter(t => t.atmos).length} in Dolby Atmos</>}</p></section>}
       {!selected && view !== "albums" && collectionTools()}
       {!selected && (view === "albums" || view === "favorites") && <section className="collection-section"><div className={`section-bar ${selecting ? "bulk-mode" : ""}`}><h2>{search && view !== "favorites" ? "Search results" : "Your albums"}<span>{albums.length}</span></h2>{view === "albums" ? collectionTools(!selecting) : <span className="sort-label">Newest releases first</span>}</div>
         {albums.length ? <div className="album-grid">{albums.map((album, index) => <motion.article className={`album-card ${selecting && visibleSelection.albums.includes(album.id) ? "is-selected" : ""}`} key={album.id} layout={albums.length <= 80 ? "position" : false} layoutDependency={`${search}:${favorites.albums.length}:${catalog.revision}`} initial={reduced || index >= 16 ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: reduced ? 0 : .35, delay: reduced || index >= 16 ? 0 : index * .018, ease, layout: spring }} whileHover={reduced ? undefined : { y: -3 }}>{selecting && <input className="selection-checkbox album-selection" type="checkbox" aria-label={`Select album ${album.title}`} checked={visibleSelection.albums.includes(album.id)} onChange={() => selectItem("albums", album.id)} />}<button className="artwork-wrap" aria-label={`${selecting ? "Select" : "Open"} album ${album.title}`} onClick={() => { if (selecting) selectItem("albums", album.id); else { setSelectedAlbum(album); setSearch(""); } }}><Cover id={album.artwork_id} title={album.title} /><span className="card-open"><ArrowRight size={20} /></span></button><div className="album-card-title"><button onClick={() => { if (selecting) selectItem("albums", album.id); else { setSelectedAlbum(album); setSearch(""); } }}><h3>{album.title}</h3></button><FavoriteButton active={favorites.albums.includes(album.id)} label={`album ${album.title}`} onClick={() => toggleFavorite("albums", album.id)} /></div><p>{album.artist}</p><span className="album-meta">{year(album.date)}{year(album.date) && " · "}{album.track_count} tracks</span></motion.article>)}</div> : <div className="empty-state"><Disc3 size={40} /><h3>{search ? "No albums found" : view === "favorites" ? "No favorite albums yet" : "No albums yet"}</h3><p>{search ? "Try an artist or album title." : view === "favorites" ? "Tap the heart beside an album to save it here." : "No albums are available on this server yet."}</p></div>}
@@ -464,7 +470,7 @@ function AppContent() {
           {selecting ? <input className="selection-checkbox" type="checkbox" aria-label={`Select track ${track.title} by ${track.artist}`} checked={visibleSelection.tracks.includes(track.id)} onChange={() => selectItem("tracks", track.id)} /> : <button className="track-play" aria-label={`Play ${track.title}`} disabled={starting} onClick={() => playListedTrack(index)}>{current?.id === track.id && status.active && (view !== "queue" || queueIndex === filteredTrackEntries[index].position) ? <Waves size={16} /> : <><span>{selected ? track.track_number || index + 1 : view === "queue" ? filteredTrackEntries[index].position + 1 : index + 1}</span><Play className="hover-play" size={15} fill="currentColor" /></>}</button>}
           <button className="track-title" onClick={() => selecting ? selectItem("tracks", track.id) : playListedTrack(index)}>{!selected && <Cover id={track.artwork_id} title={track.title} />}<span><strong>{track.title}</strong><small>{track.artist}{!selected && ` · ${track.album}`}</small></span></button>
           <span className="track-format">{track.atmos ? <AtmosBadge small /> : track.codec.toUpperCase()}</span><span className="track-time">{time(track.duration)}</span><div className="track-actions"><FavoriteButton active={favorites.tracks.includes(track.id)} label={`track ${track.title}`} onClick={() => toggleFavorite("tracks", track.id)} /></div>
-        </motion.div>)}{!filteredTracks.length && <div className="empty-state">{view === "queue" ? <ListMusic size={30} /> : <Heart size={30} />}<h3>{!selected && view === "queue" && !search ? "Your queue is empty" : !selected && view === "favorites" && !search ? "No favorite tracks yet" : "No tracks found"}</h3><p>{!selected && view === "queue" && !search ? "Play an album or track to build your queue." : !selected && view === "favorites" && !search ? "Tap the heart beside a track to save it here." : "Try another search."}</p></div>}
+        </motion.div>)}{!filteredTracks.length && <div className="empty-state">{view === "queue" ? <ListMusic size={30} /> : <Heart size={30} />}<h3>{!selected && view === "queue" && !search ? "Your queue is empty" : !selected && view === "favorites" && !search ? "No favorite tracks yet" : !selected && view === "mixes" && !search ? "No mixes yet" : "No tracks found"}</h3><p>{!selected && view === "queue" && !search ? "Play an album or track to build your queue." : !selected && view === "favorites" && !search ? "Tap the heart beside a track to save it here." : !selected && view === "mixes" && !search ? 'Tracks with “mixed by tesla” in the title appear here automatically.' : "Try another search."}</p></div>}
       </section>}
       </PageTransition></AnimatePresence>
     </main>

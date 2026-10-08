@@ -16,6 +16,7 @@ dist/
 !/apps/desktop/src-tauri/binaries/.gitkeep
 
 # Environment variables & secrets
+/config/private/
 .env
 .env.*
 !.env.example
