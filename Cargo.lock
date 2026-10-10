@@ -1886,6 +1886,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "if-addrs"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0a05c691e1fae256cf7013d99dad472dc52d5543322761f83ec8d47eab40d2b"
+dependencies = [
+ "libc",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "image"
 version = "0.25.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3163,6 +3173,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
+name = "qrcode"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d68782463e408eb1e668cf6152704bd856c78c5b6417adaee3203d8f4c1fc9ec"
+
+[[package]]
 name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4099,18 +4115,22 @@ dependencies = [
 
 [[package]]
 name = "spatial-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "spatial-desktop"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
+ "axum",
  "base64 0.22.1",
  "futures-util",
+ "http-body-util",
+ "if-addrs",
  "minisign-verify",
+ "qrcode",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
@@ -4121,13 +4141,14 @@ dependencies = [
  "tauri-plugin-updater",
  "tempfile",
  "tokio",
+ "tower",
  "uuid",
  "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "spatial-server"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "anyhow",
  "axum",

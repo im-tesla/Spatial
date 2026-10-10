@@ -111,12 +111,22 @@ impl Session {
         {
             return Err("Invalid artwork identifier".into());
         }
-        let bytes = self
-            .response(&format!("api/artwork/{id}"), false)
-            .await?
-            .bytes()
-            .await
-            .map_err(|e| e.to_string())?;
+        let response = self.response(&format!("api/artwork/{id}"), false).await?;
+        if response
+            .content_length()
+            .is_some_and(|size| size > 16 * 1024 * 1024)
+        {
+            return Err("Artwork image is too large".into());
+        }
+        let mut stream = response.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|e| e.to_string())?;
+            if bytes.len() + chunk.len() > 16 * 1024 * 1024 {
+                return Err("Artwork image is too large".into());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
         Ok(format!(
             "data:image/jpeg;base64,{}",
             base64::engine::general_purpose::STANDARD.encode(bytes)

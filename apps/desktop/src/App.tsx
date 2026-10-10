@@ -11,6 +11,9 @@ import type { Favorites } from "./favorites";
 import CollectionTools from "./CollectionTools";
 import UpdateStatus from "./UpdateStatus";
 import DiscordSettings, { useDiscordPreferences } from "./DiscordSettings";
+import RemoteSettings from "./RemoteSettings";
+import { remotePlaySelection } from "./remoteControl";
+import type { RemoteCommand } from "./remoteControl";
 import { getArtwork } from "./artwork";
 import LyricsSidebar from "./LyricsSidebar";
 import { clampLyricsWidth, loadLyricsWidth, maxLyricsWidth } from "./lyricsLayout";
@@ -107,6 +110,7 @@ function AppContent() {
   const [queue, setQueue] = useState<Track[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
   const [starting, setStarting] = useState(false);
+  const [remoteCompletion, setRemoteCompletion] = useState<{ id: string; error: string | null } | null>(null);
   const [seekPosition, setSeekPosition] = useState<number | null>(null);
   const [shuffle, setShuffle] = useState<boolean>(() => localStorage.getItem("spatial-shuffle") === "true");
   const [repeat, setRepeat] = useState<"off" | "all" | "one">(() => (localStorage.getItem("spatial-repeat") as "off" | "all" | "one") || "off");
@@ -200,17 +204,17 @@ function AppContent() {
     if (selectedAlbum && catalog && !catalog.albums.some(album => album.id === selectedAlbum.id)) setSelectedAlbum(null);
   }, [catalog, selectedAlbum]);
 
-  const start = useCallback(async (tracks: Track[], index: number) => {
-    if (pendingPlay.current) return;
-    if (!device) { setModal("output"); setError("Choose your receiver's HDMI audio endpoint before playing."); return; }
-    if (!tracks[index]) return;
+  const start = useCallback(async (tracks: Track[], index: number, reportFailure = false) => {
+    if (pendingPlay.current) { if (reportFailure) throw new Error("Playback is starting. Try again shortly."); return; }
+    if (!device) { setModal("output"); setError("Choose your receiver's HDMI audio endpoint before playing."); if (reportFailure) throw new Error("Choose an HDMI output in Spatial on the PC first."); return; }
+    if (!tracks[index]) { if (reportFailure) throw new Error("This track is unavailable."); return; }
     pendingPlay.current = true; setStarting(true); setError(""); advancing.current = false;
     try {
       await call("play_track", { id: tracks[index].id, device });
       setQueue(tracks); setQueueIndex(index);
       queueRef.current = { queue: tracks, queueIndex: index };
       setStatus({ ...emptyStatus, active: true, track_id: tracks[index].id, duration: tracks[index].duration });
-    } catch (e) { setError(String(e)); }
+    } catch (e) { setError(String(e)); if (reportFailure) throw e; }
     finally { pendingPlay.current = false; setStarting(false); }
   }, [device]);
 
@@ -218,7 +222,12 @@ function AppContent() {
     if (!catalog || !native) return;
     let cancelled = false;
     let timeout: number;
-    const poll = async () => {
+    let sampling = false;
+    let sampledAt = -Infinity;
+    let unlisten: (() => void) | undefined;
+    const sample = async () => {
+      if (cancelled || sampling || pendingPlay.current || performance.now() - sampledAt < 600) return;
+      sampling = true; sampledAt = performance.now();
       try {
         if (!pendingPlay.current) {
           const next = await call<PlaybackStatus>("playback_status");
@@ -246,10 +255,16 @@ function AppContent() {
           }
         }
       } catch (e) { if (!cancelled) setError(String(e)); }
+      finally { sampling = false; }
+    };
+    const poll = async () => {
+      await sample();
       if (!cancelled) timeout = window.setTimeout(poll, 700);
     };
+    // The native remote's clock also wakes polling when WebView timers are throttled.
+    onEvent<null>("remote-tick", () => void sample()).then(fn => { if (cancelled) fn(); else unlisten = fn; });
     void poll();
-    return () => { cancelled = true; window.clearTimeout(timeout); };
+    return () => { cancelled = true; window.clearTimeout(timeout); unlisten?.(); };
   }, [!!catalog, start]);
 
   async function connect(event: React.FormEvent) {
@@ -326,33 +341,33 @@ function AppContent() {
   }, [start]);
 
   const toggleShuffle = useCallback(() => {
-    setShuffle(prev => {
-      const next = !prev;
-      localStorage.setItem("spatial-shuffle", String(next));
-      const snapshot = queueRef.current;
-      if (next) {
-        if (snapshot.queue.length > 1 && snapshot.queueIndex >= 0) {
-          originalQueueRef.current = snapshot.queue;
-          const currentTrack = snapshot.queue[snapshot.queueIndex];
-          const others = snapshot.queue.filter((_, i) => i !== snapshot.queueIndex);
-          const shuffled = [currentTrack, ...shuffleList(others)];
-          setQueue(shuffled);
-          setQueueIndex(0);
-          queueRef.current = { queue: shuffled, queueIndex: 0 };
-        }
-      } else {
-        if (originalQueueRef.current.length > 0 && current) {
-          const orig = originalQueueRef.current;
-          const found = orig.findIndex(t => t.id === current.id);
-          const newIdx = found >= 0 ? found : 0;
-          setQueue(orig);
-          setQueueIndex(newIdx);
-          queueRef.current = { queue: orig, queueIndex: newIdx };
-        }
+    const next = !shuffleRef.current;
+    shuffleRef.current = next;
+    setShuffle(next);
+    localStorage.setItem("spatial-shuffle", String(next));
+    const snapshot = queueRef.current;
+    if (next) {
+      if (snapshot.queue.length > 1 && snapshot.queueIndex >= 0) {
+        originalQueueRef.current = snapshot.queue;
+        const currentTrack = snapshot.queue[snapshot.queueIndex];
+        const others = snapshot.queue.filter((_, i) => i !== snapshot.queueIndex);
+        const shuffled = [currentTrack, ...shuffleList(others)];
+        setQueue(shuffled);
+        setQueueIndex(0);
+        queueRef.current = { queue: shuffled, queueIndex: 0 };
       }
-      return next;
-    });
-  }, [current]);
+    } else {
+      const currentTrack = snapshot.queue[snapshot.queueIndex];
+      if (originalQueueRef.current.length > 0 && currentTrack) {
+        const orig = originalQueueRef.current;
+        const found = orig.findIndex(t => t.id === currentTrack.id);
+        const newIdx = found >= 0 ? found : 0;
+        setQueue(orig);
+        setQueueIndex(newIdx);
+        queueRef.current = { queue: orig, queueIndex: newIdx };
+      }
+    }
+  }, []);
 
   const toggleRepeat = useCallback(() => {
     setRepeat(prev => {
@@ -405,6 +420,81 @@ function AppContent() {
   const mixesCount = catalog?.tracks.filter(track => track.title.toLowerCase().includes("mixed by tesla")).length || 0;
   const themeArtwork = current ? current.artwork_id : selected ? selected.artwork_id : catalog?.albums.find(album => album.artwork_id)?.artwork_id;
   const theme = useArtworkTheme(catalog ? themeArtwork : null);
+  const remoteHandler = useRef<(command: RemoteCommand) => Promise<void>>(async () => {});
+  remoteHandler.current = async command => {
+    if (!catalog) throw new Error("Connect Spatial to a music server first.");
+    const snapshot = queueRef.current;
+    switch (command.action) {
+      case "play": {
+        const selection = remotePlaySelection(catalog, command.id, command.album_id, command.query, command.favorites_only ? favorites.tracks : undefined);
+        originalQueueRef.current = selection.tracks;
+        if (shuffleRef.current && selection.tracks.length > 1) {
+          await start([selection.tracks[selection.index], ...shuffleList(selection.tracks.filter((_, index) => index !== selection.index))], 0, true);
+        } else await start(selection.tracks, selection.index, true);
+        break;
+      }
+      case "queue": await start(snapshot.queue, command.index, true); break;
+      case "toggle_pause":
+        if (!current) throw new Error("Choose a track first.");
+        if (status.active) { await call("toggle_pause"); setStatus(await call<PlaybackStatus>("playback_status")); }
+        else await start(snapshot.queue, snapshot.queueIndex, true);
+        break;
+      case "next":
+        if (snapshot.queueIndex + 1 < snapshot.queue.length) await start(snapshot.queue, snapshot.queueIndex + 1, true);
+        else if (repeatRef.current === "all" && snapshot.queue.length) {
+          await start(shuffleRef.current ? shuffleList(snapshot.queue) : snapshot.queue, 0, true);
+        } else throw new Error("You're at the end of the queue.");
+        break;
+      case "previous":
+        if (status.position > 3) { await call("seek", { seconds: 0 }); setStatus(await call<PlaybackStatus>("playback_status")); }
+        else if (snapshot.queueIndex > 0) await start(snapshot.queue, snapshot.queueIndex - 1, true);
+        else if (repeatRef.current === "all" && snapshot.queue.length) await start(snapshot.queue, snapshot.queue.length - 1, true);
+        else throw new Error("You're at the start of the queue.");
+        break;
+      case "seek":
+        await call("seek", { seconds: command.seconds }); setSeekPosition(null);
+        setStatus(await call<PlaybackStatus>("playback_status")); break;
+      case "shuffle": toggleShuffle(); break;
+      case "repeat": toggleRepeat(); break;
+      case "favorite": {
+        const next = { ...favorites, tracks: favorites.tracks.includes(command.id) ? favorites.tracks.filter(id => id !== command.id) : [...favorites.tracks, command.id] };
+        if (!persistFavorites(next)) throw new Error("Favorites couldn't be saved on the PC.");
+        break;
+      }
+    }
+  };
+  useEffect(() => {
+    if (!native) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    onEvent<RemoteCommand>("remote-command", command => {
+      void (async () => {
+        if (!await call<boolean>("remote_command_pending", { id: command.request_id })) return;
+        let error: string | null = null;
+        try { await remoteHandler.current(command); } catch (e) { error = e instanceof Error ? e.message : String(e); }
+        setRemoteCompletion({ id: command.request_id, error });
+      })().catch(() => {});
+    }).then(fn => { if (cancelled) fn(); else unlisten = fn; });
+    return () => { cancelled = true; unlisten?.(); };
+  }, []);
+  useEffect(() => {
+    if (native) void call("publish_remote_library", { library: catalog }).catch(() => {});
+  }, [catalog]);
+  useEffect(() => {
+    if (!native) return;
+    // Publish the committed React state before acknowledging a phone command.
+    // A phone's immediate read after a skip must see the new queue and controls.
+    const completion = remoteCompletion;
+    void call("publish_remote_state", { snapshot: {
+      connected: !!catalog, ready: !!device, starting, current: current || null, status,
+      queue_ids: queue.map(track => track.id), queue_index: queueIndex, shuffle, repeat,
+      favorite_ids: favorites.tracks, theme,
+    } }).then(async () => {
+      if (completion) await call("complete_remote_command", completion);
+    }).catch(() => {}).finally(() => {
+      if (completion) setRemoteCompletion(previous => previous?.id === completion.id ? null : previous);
+    });
+  }, [!!catalog, device, starting, current, status, queue, queueIndex, shuffle, repeat, favorites.tracks, theme, remoteCompletion]);
   const maximumLyricsWidth = maxLyricsWidth(viewportWidth);
   const panelWidth = clampLyricsWidth(lyricsWidth, maximumLyricsWidth);
   const lyricsTrack = current || null;
@@ -507,7 +597,7 @@ function AppContent() {
         <div className="progress"><span>{time(seekPosition ?? status.position)}</span><input aria-label="Playback position" aria-valuetext={`${time(seekPosition ?? status.position)} of ${time(status.duration || current?.duration || 0)}`} style={{ "--seek-fill": `${seekFill}%` } as CSSProperties} type="range" min={0} max={status.duration || current?.duration || 1} step={0.1} value={seekPosition ?? status.position} disabled={!status.active || starting} onChange={e => setSeekPosition(Number(e.target.value))} onPointerUp={e => commitSeek(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commitSeek(Number(e.currentTarget.value)); }} /><span>{time(status.duration || current?.duration || 0)}</span></div>
       </div><div className="player-details"><button ref={lyricsToggleRef} className={`icon-button ${lyricsOpen ? "is-active" : ""}`} aria-label={lyricsOpen ? "Close lyrics" : "Open lyrics"} aria-pressed={lyricsOpen} aria-controls="lyrics-sidebar" onClick={() => { setLyricsOpen(open => !open); }}><Mic2 size={18} /></button><button className="icon-button" aria-label="Receiver output settings" title="Control volume on your receiver" onClick={() => setModal("output")}><Volume2 size={18} /></button><button className={`icon-button ${view === "queue" ? "is-active" : ""}`} aria-label="Open queue" onClick={openQueue}><ListMusic size={19} /></button></div>
     </footer>
-    <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
+    <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><RemoteSettings /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
     {modal === "output" && <DialogTransition key="output" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><div><span className="eyebrow">DIRECT TO YOUR RECEIVER</span><h2 id="modal-title">Audio output</h2></div><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div>
       <p className="modal-description">Select the Windows HDMI endpoint connected to your Atmos receiver. Spatial requests exclusive Dolby passthrough.</p><div className="output-mode"><Layers3 size={20} /><div><strong>Original Dolby bitstream</strong><span>E-AC-3 / TrueHD · receiver controls volume</span></div><span className="mode-pill">EXCLUSIVE</span></div>
         {loadingDevices ? <div className="loading"><LoaderCircle className="spin" size={20} /> Finding audio endpoints…</div> : devices.map(item => <button className={`device-option ${device === item.name ? "selected" : ""}`} key={item.name} onClick={async () => { if (status.active && item.name !== device) { await action("stop_playback"); setStatus(emptyStatus); } setDevice(item.name); localStorage.setItem("spatial-output", item.name); setError(""); }}><Speaker size={20} /><span>{item.description}</span>{device === item.name && <Check size={19} />}</button>)}

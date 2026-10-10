@@ -19,6 +19,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 futures-util = "0.3"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
+axum = "0.8"
+if-addrs = "0.15"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
@@ -26,3 +29,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Securit
 [dev-dependencies]
 tempfile = "3"
 minisign-verify = "0.2.5"
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

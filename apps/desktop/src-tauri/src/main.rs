@@ -2,6 +2,7 @@
 mod credentials;
 mod discord;
 mod playback;
+mod remote;
 mod server;
 #[cfg(test)]
 mod update_tests;
@@ -19,6 +20,7 @@ struct NativeState {
     player: Mutex<Player>,
     updating: Mutex<bool>,
     discord: discord::Presence,
+    remote: remote::Remote,
 }
 
 async fn session(state: &NativeState) -> Result<Session, String> {
@@ -48,6 +50,7 @@ async fn connect_server(
 }
 
 async fn activate_session(candidate: Session, app: tauri::AppHandle, state: &NativeState) {
+    state.remote.stop().await;
     state.player.lock().await.stop().await;
     state.discord.clear();
     if let Some(task) = state.subscription.lock().await.take() {
@@ -92,6 +95,9 @@ async fn restore_server(
 
 #[tauri::command]
 async fn disconnect_server(state: State<'_, NativeState>) -> Result<(), String> {
+    state.remote.stop().await;
+    state.remote.publish(remote::Snapshot::default()).await;
+    state.remote.library(None).await;
     if let Some(task) = state.subscription.lock().await.take() {
         task.abort();
     }
@@ -171,6 +177,7 @@ async fn stop_playback(state: State<'_, NativeState>) -> Result<(), String> {
 
 #[tauri::command]
 async fn prepare_update(state: State<'_, NativeState>) -> Result<(), String> {
+    state.remote.stop().await;
     let mut updating = state.updating.lock().await;
     *updating = true;
     state.player.lock().await.stop().await;
@@ -197,6 +204,60 @@ fn configure_discord(
     state.discord.configure(enabled)
 }
 
+#[tauri::command]
+async fn remote_settings(state: State<'_, NativeState>) -> Result<remote::Settings, String> {
+    Ok(state.remote.settings().await)
+}
+
+#[tauri::command]
+async fn start_remote(
+    address: String,
+    app: tauri::AppHandle,
+    state: State<'_, NativeState>,
+) -> Result<remote::Settings, String> {
+    session(&state).await?;
+    state.remote.start(address, app).await
+}
+
+#[tauri::command]
+async fn stop_remote(state: State<'_, NativeState>) -> Result<remote::Settings, String> {
+    state.remote.stop().await;
+    Ok(state.remote.settings().await)
+}
+
+#[tauri::command]
+async fn renew_remote_pairing(state: State<'_, NativeState>) -> Result<remote::Settings, String> {
+    state.remote.renew().await
+}
+
+#[tauri::command]
+async fn publish_remote_state(
+    snapshot: remote::Snapshot,
+    state: State<'_, NativeState>,
+) -> Result<(), String> {
+    state.remote.publish(snapshot).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn publish_remote_library(
+    library: Option<Library>,
+    state: State<'_, NativeState>,
+) -> Result<(), String> {
+    state.remote.library(library).await;
+    Ok(())
+}
+
+#[tauri::command]
+fn remote_command_pending(id: String, state: State<'_, NativeState>) -> bool {
+    state.remote.pending(&id)
+}
+
+#[tauri::command]
+fn complete_remote_command(id: String, error: Option<String>, state: State<'_, NativeState>) {
+    state.remote.complete(id, error);
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -217,7 +278,15 @@ fn main() {
             prepare_update,
             cancel_update,
             discord_configuration,
-            configure_discord
+            configure_discord,
+            remote_settings,
+            start_remote,
+            stop_remote,
+            renew_remote_pairing,
+            publish_remote_state,
+            publish_remote_library,
+            remote_command_pending,
+            complete_remote_command
         ])
         .build(tauri::generate_context!())
         .expect("Cannot initialize Spatial");
@@ -225,6 +294,7 @@ fn main() {
         if matches!(event, tauri::RunEvent::Exit) {
             let state = handle.state::<NativeState>();
             tauri::async_runtime::block_on(async {
+                state.remote.stop().await;
                 if let Some(task) = state.subscription.lock().await.take() {
                     task.abort();
                 }

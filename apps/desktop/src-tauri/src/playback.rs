@@ -18,7 +18,7 @@ pub struct AudioDevice {
     pub description: String,
 }
 
-#[derive(Clone, Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PlaybackStatus {
     pub track_id: Option<String>,
     pub active: bool,

@@ -18,6 +18,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** Synced lyrics appear in a resizable side panel. Click a line to seek, or keep browsing while the song continues.
 - **Keep listening.** Build a playback queue, move between tracks, and reopen the app with the server connection remembered securely.
+- **Stay in your listening spot.** Enable the [phone remote](docs/remote.md), scan a QR code, and browse your collection or control the desktop player from a phone on the same network.
 - **Share your listening.** [Discord activity](docs/discord.md) shows the current track, public album artwork and playback progress. Enabled by default, with a saved opt-out.
 - **See the album in the interface.** Artwork sets the palette, with smooth color changes, transitions and support for reduced motion.
 
@@ -35,6 +36,12 @@ The queue lives in the main view. Lyrics sit beside it, with adjustable width an
 
 ![Spatial playback queue beside synced lyrics](docs/screenshots/readme-lyrics.png)
 
+### A remote from your listening spot
+
+Scan a QR code in desktop Settings to open a phone remote. Browse albums, search, change tracks and control the same playback queue, with colors that follow the album.
+
+<img src="docs/screenshots/phone-remote.jpg" alt="Spatial phone remote with album artwork and playback controls" width="280" />
+
 *Screenshots show the current interface with original demo artwork, fictional releases and simulated playback.*
 
 ## Get started
@@ -51,6 +58,8 @@ Spatial has two parts: a server that reads the music files and a desktop app tha
 3. **Connect and play.** Enter the server's reachable HTTP or HTTPS address and its access token. Choose the receiver's HDMI endpoint in Audio output, then play an album.
 
 The app remembers a successful connection in Windows Credential Manager and reconnects on launch. The server address is configurable; use the address that reaches your deployment.
+
+For control from your phone, open **Settings → Phone remote**, enable it, and scan the QR code. The desktop continues playing over HDMI; the phone controls its existing player and queue.
 
 Windows clients automatically check for new releases and offer **Update and restart** when a signed update is available. See [desktop updates](docs/updates.md) for the one-time release setup and publishing workflow.
 

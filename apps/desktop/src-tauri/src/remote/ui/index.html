@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#10130e"><title>Spatial Remote</title><link rel="icon" href="/favicon.png"><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/remote.css"></head>
+<body>
+  <div class="remote-shell">
+    <header><a class="wordmark" href="/" aria-label="Spatial remote">spatial<span>.</span></a><span class="remote-label">REMOTE</span></header>
+    <p id="notice" role="status" hidden></p>
+    <main id="main">
+      <section id="playing" aria-label="Now playing">
+        <div class="hero-cover" id="hero-cover"></div>
+        <div class="song-heading"><div><h1 id="song-title">Nothing playing</h1><p id="song-artist">Choose an album or track.</p><p id="song-album"></p></div><button id="favorite" class="icon-button" aria-label="Favorite current track" aria-pressed="false" disabled></button></div>
+        <div class="seek"><input id="seek" type="range" min="0" max="1" step="0.1" value="0" aria-label="Playback position" disabled><div class="time-labels"><span id="position">0:00</span><span id="duration">0:00</span></div></div>
+        <div class="transport"><button id="shuffle" class="icon-button" aria-label="Shuffle" aria-pressed="false" disabled></button><button id="previous" class="icon-button skip" aria-label="Previous track" disabled></button><button id="toggle_pause" class="play-button" aria-label="Play" disabled></button><button id="next" class="icon-button skip" aria-label="Next track" disabled></button><button id="repeat" class="icon-button" aria-label="Repeat: Off" disabled></button></div>
+        <p class="output-note" id="output-note" hidden>Choose an HDMI output in Spatial on the PC first.</p>
+      </section>
+      <section id="collection" hidden>
+        <div class="collection-heading"><button id="back" class="icon-button" aria-label="Back to albums" hidden></button><h1 id="collection-title">Albums</h1><button id="favorites-filter" class="icon-button" aria-label="Show favorites" aria-pressed="false" hidden></button></div>
+        <label class="search"><span id="search-icon"></span><input id="search" type="search" placeholder="Search your collection" aria-label="Search your collection" autocomplete="off" maxlength="200"></label>
+        <div id="album-detail" hidden></div><div id="items"></div>
+      </section>
+    </main>
+    <button id="mini-player" hidden aria-label="Open now playing"><span id="mini-cover" class="small-cover"></span><span class="mini-label"><strong id="mini-title"></strong><span id="mini-artist"></span></span><span id="mini-status"></span></button>
+    <nav aria-label="Remote navigation"><button data-view="playing" class="active" aria-current="page"><span data-icon="disc"></span>Playing</button><button data-view="albums"><span data-icon="albums"></span>Albums</button><button data-view="tracks"><span data-icon="tracks"></span>Tracks</button><button data-view="queue"><span data-icon="queue"></span>Queue</button></nav>
+  </div>
+  <script type="module" src="/remote.js"></script>
+</body></html>

@@ -12,3 +12,28 @@
 .preference-switch.enabled > span { transform: translateX(16px); background: var(--base); }
 .preference-switch:disabled { opacity: .5; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .preference-switch, .preference-switch > span { transition: none; } }
+.phone-remote { padding-top: 22px; border-top: 1px solid var(--line); }
+.remote-network { position: relative; display: grid; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 16px; }
+.network-picker { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 1px solid var(--strong-line); border-radius: 9px; padding: 11px 13px; color: var(--text); background: var(--surface); text-align: left; transition: background .2s, border-color .2s; }
+.network-picker:hover:not(:disabled), .network-picker[aria-expanded="true"] { background: var(--raised); border-color: var(--accent); }
+.network-picker > span, .network-option > span { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+.network-picker > span > span:first-child, .network-option > span > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.network-address { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.network-picker > svg { flex-shrink: 0; margin-left: 12px; color: var(--muted); transition: transform .2s; }
+.network-picker > svg.expanded { transform: rotate(180deg); }
+.network-picker:disabled { opacity: .5; cursor: default; }
+.network-options { position: relative; z-index: 2; padding: 5px; border: 1px solid var(--strong-line); border-radius: 11px; background: var(--panel); box-shadow: 0 8px 24px rgb(0 0 0 / .2); max-height: 180px; overflow-y: auto; }
+.network-option { display: flex; align-items: center; gap: 12px; padding: 11px 8px; border-radius: 6px; color: var(--text); cursor: pointer; }
+.network-option.highlighted { background: var(--active-bg); }
+.network-option > svg { flex-shrink: 0; color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .network-picker, .network-picker > svg { transition: none; } }
+.remote-pairing { display: flex; gap: 21px; align-items: center; margin-top: 22px; }
+.remote-qr { width: 150px; height: 150px; flex: 0 0 150px; border-radius: 10px; background: white; padding: 3px; }
+.remote-qr-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); background: var(--raised); font-size: 12px; }
+.remote-instructions { min-width: 0; }
+.remote-instructions strong { font-weight: 550; font-size: 14px; letter-spacing: -.2px; }
+.remote-instructions p { color: var(--muted); font-size: 12px; line-height: 1.6; margin: 8px 0; }
+.remote-address, .remote-pair-status { display: block; color: var(--muted); font-size: 11px; line-height: 1.8; }
+.remote-pair-actions { display: flex; gap: 6px; margin-top: 11px; flex-wrap: wrap; }
+.remote-pair-actions .secondary { font-size: 11px; padding: 7px 9px; gap: 5px; }
+.modal:has(.phone-remote) { max-height: calc(100vh - 80px); overflow-y: auto; }
