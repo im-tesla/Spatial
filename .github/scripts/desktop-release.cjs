@@ -27,7 +27,7 @@ function planRelease(version, requestedTag, releases) {
   if (published.some(release => versionOf(release.tag_name) && compare(versionOf(release.tag_name), version) > 0)) throw new Error('This version is older than an existing stable release. Bump the version before publishing.');
   return { publish: true, tag: requestedTag || `v${version}`, version };
 }
-function validateManifest(manifest, version, installerUrls, signature) {
+function validateManifest(manifest, version, installerUrls, signature, linux) {
   if (manifest.version !== version) throw new Error(`Updater manifest version ${manifest.version} does not match ${version}.`);
   const urls = Array.isArray(installerUrls) ? installerUrls : [installerUrls];
   const windows = ['windows-x86_64', 'windows-x86_64-nsis'].map(platform => manifest.platforms?.[platform]).filter(Boolean);
@@ -35,6 +35,14 @@ function validateManifest(manifest, version, installerUrls, signature) {
   for (const entry of windows) {
     if (!urls.includes(entry.url)) throw new Error('Updater manifest URL does not identify the verified release asset.');
     if (typeof entry.signature !== 'string' || entry.signature.trim() !== signature.trim()) throw new Error('Updater manifest signature does not match the verified installer.');
+  }
+  if (linux) {
+    const entries = ['linux-x86_64', 'linux-x86_64-appimage'].map(platform => manifest.platforms?.[platform]).filter(Boolean);
+    if (!entries.length) throw new Error('Updater manifest has no Linux x64 AppImage.');
+    for (const entry of entries) {
+      if (!linux.urls.includes(entry.url)) throw new Error('Linux updater URL does not identify the verified AppImage.');
+      if (typeof entry.signature !== 'string' || entry.signature.trim() !== linux.signature.trim()) throw new Error('Linux updater signature does not match the verified AppImage.');
+    }
   }
 }
 module.exports = { readVersion, planRelease, validateManifest };

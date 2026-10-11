@@ -12,7 +12,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 ## What you can do
 
-- **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the Windows HDMI output, with source files served without transcoding.
+- **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the desktop's HDMI output, with source files served without transcoding.
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
 - **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “mixed by tesla” in their titles, regardless of capitalization.
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
@@ -51,27 +51,27 @@ Spatial has two parts: a server that reads the music files and a desktop app tha
 | Component | Current requirements |
 | --- | --- |
 | Server | Rust service with FFmpeg/FFprobe; native Linux setup scripts are provided. MediaInfo improves Atmos metadata detection. |
-| Desktop | Windows x64 with WebView2 and an HDMI audio endpoint connected to an Atmos-capable receiver. |
+| Desktop | Windows x64 with WebView2, or Linux x64 with mpv and a desktop keyring. An HDMI audio endpoint connected to an Atmos-capable receiver is required. |
 
 1. **Start the server.** Follow the [server setup guide](docs/server.md), choose a media directory, and create an access token. Configuration, the catalog and artwork cache can stay in the project directory.
-2. **Build the desktop app.** Follow the [Windows build guide](docs/development.md#build-the-desktop-app). The installer bundles the playback engine.
+2. **Install the desktop app.** Download a Windows installer, Linux AppImage or Debian package from [GitHub Releases](https://github.com/im-tesla/Spatial/releases/latest). See the [Linux guide](docs/linux.md) for requirements, or the [development guide](docs/development.md#build-the-desktop-app) to build from source.
 3. **Connect and play.** Enter the server's reachable HTTP or HTTPS address and its access token. Choose the receiver's HDMI endpoint in Audio output, then play an album.
 
-The app remembers a successful connection in Windows Credential Manager and reconnects on launch. The server address is configurable; use the address that reaches your deployment.
+The app remembers a successful connection securely in Windows Credential Manager or the Linux desktop keyring and reconnects on launch. The server address is configurable; use the address that reaches your deployment.
 
 For control from your phone, open **Settings → Phone remote**, enable it, and scan the QR code. The desktop continues playing over HDMI; the phone controls its existing player and queue.
 
-Windows clients automatically check for new releases and offer **Update and restart** when a signed update is available. See [desktop updates](docs/updates.md) for the one-time release setup and publishing workflow.
+Windows and Linux AppImage clients automatically check for new releases and offer **Update and restart** when a signed update is available. Debian installations update by installing the newer package. See [desktop updates](docs/updates.md) for the release workflow.
 
 Spatial runs natively. Docker is not required.
 
 ## Playback
 
 ```text
-Music files → Spatial server → Windows desktop → HDMI bitstream → AVR
+Music files → Spatial server → Desktop player → HDMI bitstream → AVR
 ```
 
-The server streams original file bytes. The native player demuxes the audio and requests compressed Dolby output through WASAPI exclusive mode, preserving the encoded Atmos information for the receiver to decode.
+The server streams original file bytes. The native player demuxes the audio and requests compressed Dolby output through WASAPI exclusive mode on Windows or direct ALSA HDMI output on Linux, preserving the encoded Atmos information for the receiver to decode. Linux support is new; physical AVR verification has so far been performed on Windows.
 
 This is an early preview. Playback currently supports the compressed E-AC-3 and TrueHD path. Other formats can appear in the library, but AAC, FLAC and MP3 playback is not implemented. Volume is controlled on the receiver; software volume, EQ, normalization, crossfade and seamless gapless playback are unavailable. Dolby MAT is outside the current playback path.
 

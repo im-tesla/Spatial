@@ -1,8 +1,8 @@
 # Desktop updates
 
-Windows clients check the official Spatial GitHub Releases feed at startup and every six hours while open. Focus returns also trigger a check when it is due. **Check for updates** is available below the server connection controls and on the connection screen.
+Windows and Linux AppImage clients check the official Spatial GitHub Releases feed at startup and every six hours while open. Focus returns also trigger a check when it is due. **Check for updates** is available below the server connection controls and on the connection screen.
 
-When a newer stable version is available, **Update and restart** downloads it in the background. Playback continues while downloading. The native updater verifies the installer signature before stopping playback and launching the Windows installer. The installer restarts Spatial; favorites, saved server credentials and preferences remain in their existing storage.
+When a newer stable version is available, **Update and restart** downloads it in the background. Playback continues while downloading. The native updater verifies the payload signature before stopping playback and installing the update. The Windows installer relaunches Spatial; Linux replaces the writable AppImage and restarts the app. Favorites, saved server credentials and preferences remain in their existing storage. Debian packages update by installing the newer `.deb`; the AppImage updater is disabled for that edition.
 
 An offline check does not interrupt listening. A failed download or signature check leaves the current installation and playback running. Installation failures show a retry action. Downloading and installing require the listener's button click.
 
@@ -37,7 +37,7 @@ git commit -m "Release Spatial 0.1.4"
 git push origin main
 ```
 
-The **Release desktop** workflow creates the matching `v0.1.4` tag and release automatically. It tests the desktop, builds and signs the Windows installer, uploads the installer, its `.sig` and `latest.json` to a draft, verifies the actual installer and manifest, then publishes the release as latest. A failed check leaves it unpublished. No personal access token is required; the workflow uses GitHub's built-in token with repository contents write permission.
+The **Release desktop** workflow creates the matching version tag and release automatically. It verifies the Windows installer, then adds Linux AppImage and Debian packages to the same draft. It verifies the AppImage signature and both platforms' entries in `latest.json` before publishing the release as latest. The builds run sequentially to avoid updater-manifest upload races. A failed check leaves the release unpublished. No personal access token is required; the workflow uses GitHub's built-in token with repository contents write permission.
 
 Pushes with an already published version skip the release build. Published numeric tags such as `0.1.2` and prefixed tags such as `v0.1.3` are treated as the same version. Published releases are never replaced, and an older version cannot become the latest release. Regular CI still runs on code pushes.
 

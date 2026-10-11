@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "targets": ["appimage", "deb"],
+    "externalBin": [],
+    "resources": [],
+    "icon": ["icons/icon.png"],
+    "linux": {
+      "deb": { "depends": ["mpv"] }
+    }
+  }
+}

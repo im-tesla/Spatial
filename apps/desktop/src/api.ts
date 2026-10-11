@@ -25,7 +25,7 @@ export async function call<T>(command: string, args: Record<string, unknown> = {
   }
   if (command === "audio_devices") return [] as T;
   if (command === "playback_status") return { active: false, paused: false, ended: false, position: 0, duration: 0, passthrough: false, output_format: "", output_driver: "", error: null, track_id: null } as T;
-  throw new Error("HDMI playback is available in the Windows desktop application");
+  throw new Error("HDMI playback is available in the desktop application");
 }
 
 export async function onEvent<T>(event: string, handler: (value: T) => void): Promise<() => void> {

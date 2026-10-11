@@ -61,6 +61,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    outputs:
+      release-id: ${{ steps.build.outputs.releaseId }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -128,7 +130,7 @@ jobs:
           $env:SPATIAL_UPDATE_INSTALLER = Join-Path (Get-Location) "target/release/bundle/nsis/Spatial_$($env:RELEASE_VERSION)_x64-setup.exe"
           cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify updater manifest and publish release
+      - name: Verify Windows updater manifest
         uses: actions/github-script@v7
         env:
           RELEASE_ID: ${{ steps.build.outputs.releaseId }}
@@ -150,5 +152,97 @@ jobs:
             const manifest = JSON.parse(typeof data === 'string' ? data : Buffer.from(data).toString('utf8'));
             const localSignature = fs.readFileSync(`target/release/bundle/nsis/${installerName}.sig`, 'utf8');
             validateManifest(manifest, version, [installer.browser_download_url, installer.url], localSignature);
+            core.info('Windows installer and updater entry verified. The release stays a draft until Linux succeeds.');
+
+  signed-linux:
+    needs: [plan, signed-windows]
+    if: needs.plan.outputs.publish == 'true'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.commit }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        run: bash tools/setup-linux-desktop.sh
+      - name: Test compressed playback, keyring and desktop
+        run: |
+          bash tools/verify-passthrough-linux.sh
+          cargo test --locked -p spatial-desktop
+          dbus-run-session -- bash -c 'printf %s spatial-ci-only | gnome-keyring-daemon --unlock --components=secrets; cargo test --locked -p spatial-desktop credentials::platform::tests -- --ignored'
+          cd apps/desktop
+          npm ci
+          npm test
+      - name: Build signed Linux packages and extend draft assets
+        id: build
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: apps/desktop
+          args: --config src-tauri/tauri.release.conf.json -- --locked
+          tagName: ${{ needs.plan.outputs.tag }}
+          releaseCommitish: ${{ needs.plan.outputs.commit }}
+          releaseName: Spatial ${{ needs.plan.outputs.version }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          generateReleaseNotes: true
+      - name: Verify AppImage against the client key and check Debian dependency
+        run: |
+          test "$(find target/release/bundle/appimage -name '*.AppImage' | wc -l)" -eq 1
+          SPATIAL_UPDATE_INSTALLER="$(find target/release/bundle/appimage -name '*.AppImage')" cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
+          test "$(find target/release/bundle/deb -name '*.deb' | wc -l)" -eq 1
+          dpkg-deb --field target/release/bundle/deb/*.deb Depends | grep -w mpv
+      - name: Verify combined updater manifest and publish release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ steps.build.outputs.releaseId }}
+          WINDOWS_RELEASE_ID: ${{ needs.signed-windows.outputs.release-id }}
+          RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const { validateManifest } = require('./.github/scripts/desktop-release.cjs');
+            const release_id = Number(process.env.RELEASE_ID);
+            if (release_id !== Number(process.env.WINDOWS_RELEASE_ID)) throw new Error('Windows and Linux must belong to the same draft release.');
+            const version = process.env.RELEASE_VERSION;
+            const { data: release } = await github.rest.repos.getRelease({ ...context.repo, release_id });
+            if (!release.draft) throw new Error('The release must stay a draft until all platforms are verified.');
+            const asset = name => {
+              const value = release.assets.find(asset => asset.name === name && asset.state === 'uploaded');
+              if (!value) throw new Error(`Missing release asset: ${name}`);
+              return value;
+            };
+            const download = async asset => {
+              const { data } = await github.rest.repos.getReleaseAsset({ ...context.repo, asset_id: asset.id, headers: { accept: 'application/octet-stream' } });
+              return typeof data === 'string' ? data : Buffer.from(data).toString('utf8');
+            };
+            const installerName = `Spatial_${version}_x64-setup.exe`;
+            const installer = asset(installerName);
+            const windowsSignature = await download(asset(`${installerName}.sig`));
+            const appimageDirectory = 'target/release/bundle/appimage';
+            const appimageName = fs.readdirSync(appimageDirectory).find(name => name.endsWith('.AppImage'));
+            const appimage = asset(appimageName);
+            asset(`${appimageName}.sig`);
+            const debName = fs.readdirSync('target/release/bundle/deb').find(name => name.endsWith('.deb'));
+            asset(debName);
+            const linuxSignature = fs.readFileSync(path.join(appimageDirectory, `${appimageName}.sig`), 'utf8');
+            const manifest = JSON.parse(await download(asset('latest.json')));
+            validateManifest(manifest, version, [installer.browser_download_url, installer.url], windowsSignature,
+              { urls: [appimage.browser_download_url, appimage.url], signature: linuxSignature });
             const { data: published } = await github.rest.repos.updateRelease({ ...context.repo, release_id, draft: false, prerelease: false, make_latest: 'true' });
-            await core.summary.addLink(`Spatial ${version} is published`, published.html_url).write();
+            await core.summary.addLink(`Spatial ${version} for Windows and Linux is published`, published.html_url).write();

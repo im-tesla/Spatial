@@ -5,12 +5,46 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
+#[cfg(any(windows, target_os = "linux"))]
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(windows)]
+use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::process::{Child, Command};
 #[cfg(windows)]
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::windows::named_pipe::{ClientOptions, NamedPipeClient},
-};
+type IpcStream = NamedPipeClient;
+#[cfg(target_os = "linux")]
+type IpcStream = tokio::net::UnixStream;
+
+fn output_driver() -> &'static str {
+    if cfg!(windows) {
+        "wasapi"
+    } else if cfg!(target_os = "linux") {
+        "alsa"
+    } else {
+        "unsupported"
+    }
+}
+
+fn valid_device(device: &str) -> bool {
+    !device.contains(['\n', '\r', '\0'])
+        && if cfg!(windows) {
+            device.starts_with("wasapi/") && device.len() > 7
+        } else if cfg!(target_os = "linux") {
+            // Avoid default, dmix, PulseAudio and PipeWire routes that can alter the stream.
+            device.starts_with("alsa/hdmi:") && device.len() > 10
+        } else {
+            false
+        }
+}
+
+#[cfg(windows)]
+async fn open_ipc(endpoint: &str) -> std::io::Result<IpcStream> {
+    ClientOptions::new().open(endpoint)
+}
+#[cfg(target_os = "linux")]
+async fn open_ipc(endpoint: &str) -> std::io::Result<IpcStream> {
+    tokio::net::UnixStream::connect(endpoint).await
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AudioDevice {
@@ -35,28 +69,44 @@ pub struct PlaybackStatus {
 #[derive(Default)]
 pub struct Player {
     child: Option<Child>,
-    #[cfg(windows)]
-    connection: Option<BufReader<NamedPipeClient>>,
+    #[cfg(any(windows, target_os = "linux"))]
+    connection: Option<BufReader<IpcStream>>,
+    #[cfg(target_os = "linux")]
+    ipc_directory: Option<tempfile::TempDir>,
     request_id: u64,
     pub status: PlaybackStatus,
     started: Option<Instant>,
 }
 
 pub fn executable() -> Result<PathBuf, String> {
-    let installed = std::env::current_exe()
-        .map_err(|e| e.to_string())?
-        .parent()
-        .ok_or("Cannot find application directory")?
-        .join("mpv.exe");
-    if installed.is_file() {
-        return Ok(installed);
+    #[cfg(windows)]
+    {
+        let installed = std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .parent()
+            .ok_or("Cannot find application directory")?
+            .join("mpv.exe");
+        if installed.is_file() {
+            return Ok(installed);
+        }
+        let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries/mpv-x86_64-pc-windows-msvc.exe");
+        if development.is_file() {
+            return Ok(development);
+        }
+        Err("Playback engine is missing. Run tools/setup-mpv.ps1 before building Spatial.".into())
     }
-    let development =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/mpv-x86_64-pc-windows-msvc.exe");
-    if development.is_file() {
-        return Ok(development);
+    #[cfg(target_os = "linux")]
+    {
+        for path in ["/usr/bin/mpv", "/usr/local/bin/mpv"] {
+            if std::path::Path::new(path).is_file() {
+                return Ok(PathBuf::from(path));
+            }
+        }
+        Err("Install mpv with your distribution's package manager to enable HDMI playback.".into())
     }
-    Err("Playback engine is missing. Run tools/setup-mpv.ps1 before building Spatial.".into())
+    #[cfg(not(any(windows, target_os = "linux")))]
+    Err("Playback is supported on Windows and Linux.".into())
 }
 
 fn command() -> Result<Command, String> {
@@ -68,6 +118,11 @@ fn command() -> Result<Command, String> {
         command.as_std_mut().creation_flags(0x08000000);
     }
     command.args(["--no-config", "--load-scripts=no", "--ytdl=no"]);
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_some() {
+        // The system player must use its own libraries, not the AppImage's GTK libraries.
+        command.env_remove("LD_LIBRARY_PATH");
+    }
     Ok(command)
 }
 
@@ -75,14 +130,15 @@ pub async fn devices() -> Result<Vec<AudioDevice>, String> {
     let output = tokio::time::timeout(
         Duration::from_secs(10),
         command()?
-            .args(["--ao=wasapi", "--audio-device=help"])
+            .arg(format!("--ao={}", output_driver()))
+            .arg("--audio-device=help")
             .output(),
     )
     .await
     .map_err(|_| "Audio device enumeration timed out")?
     .map_err(|e| e.to_string())?;
     if !output.status.success() {
-        return Err("Cannot enumerate Windows audio endpoints".into());
+        return Err("Cannot enumerate HDMI audio outputs".into());
     }
     let text = String::from_utf8_lossy(&output.stdout);
     let mut result = Vec::new();
@@ -93,7 +149,7 @@ pub async fn devices() -> Result<Vec<AudioDevice>, String> {
         let Some((name, description)) = tail.split_once('\'') else {
             continue;
         };
-        if name.starts_with("wasapi/") {
+        if valid_device(name) {
             result.push(AudioDevice {
                 name: name.into(),
                 description: description
@@ -113,9 +169,13 @@ impl Player {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
             self.connection = None;
+        }
+        #[cfg(target_os = "linux")]
+        {
+            self.ipc_directory = None;
         }
         self.status.active = false;
         self.status.ended = false;
@@ -130,10 +190,12 @@ impl Player {
                 track.codec
             ));
         }
-        if !device.starts_with("wasapi/") || device.contains(['\n', '\r']) {
-            return Err("Select a Windows HDMI audio endpoint in Output settings".into());
+        if !valid_device(device) {
+            return Err("Select an HDMI audio output in Output settings".into());
         }
         self.stop().await;
+        #[cfg(any(windows, target_os = "linux"))]
+        let mut launch = command()?;
         self.status = PlaybackStatus {
             track_id: Some(track.id.clone()),
             duration: track.duration,
@@ -141,10 +203,27 @@ impl Player {
             ..Default::default()
         };
         self.started = Some(Instant::now());
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "linux"))]
         {
+            #[cfg(windows)]
             let pipe = format!(r"\\.\pipe\spatial-{}", uuid::Uuid::new_v4());
-            let mut launch = command()?;
+            #[cfg(target_os = "linux")]
+            let pipe = {
+                use std::os::unix::fs::PermissionsExt;
+                let directory = tempfile::Builder::new()
+                    .prefix("spatial-ipc-")
+                    .tempdir()
+                    .map_err(|_| "Cannot create the playback connection directory")?;
+                std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
+                    .map_err(|_| "Cannot protect the playback connection directory")?;
+                let pipe = directory
+                    .path()
+                    .join("player.sock")
+                    .to_string_lossy()
+                    .into_owned();
+                self.ipc_directory = Some(directory);
+                pipe
+            };
             launch
                 .args([
                     "--idle=yes",
@@ -166,6 +245,7 @@ impl Player {
                     "--cache=yes",
                     "--demuxer-max-bytes=67108864",
                 ])
+                .arg(format!("--ao={}", output_driver()))
                 .arg(format!("--audio-device={device}"))
                 .arg(format!("--input-ipc-server={pipe}"))
                 .stdin(std::process::Stdio::null())
@@ -177,7 +257,7 @@ impl Player {
                     .map_err(|e| format!("Cannot start playback engine: {e}"))?,
             );
             for _ in 0..100 {
-                match ClientOptions::new().open(&pipe) {
+                match open_ipc(&pipe).await {
                     Ok(connection) => {
                         self.connection = Some(BufReader::new(connection));
                         break;
@@ -209,15 +289,15 @@ impl Player {
             }
             Ok(())
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "linux")))]
         {
             let _ = url;
             self.stop().await;
-            Err("Spatial bitstream playback currently supports Windows only".into())
+            Err("Spatial bitstream playback supports Windows and Linux".into())
         }
     }
 
-    #[cfg(windows)]
+    #[cfg(any(windows, target_os = "linux"))]
     async fn request(&mut self, command: Value) -> Result<Value, String> {
         self.request_id += 1;
         let id = self.request_id;
@@ -255,9 +335,9 @@ impl Player {
         }).await.map_err(|_| "Playback engine response timed out".to_string())?
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     async fn request(&mut self, _: Value) -> Result<Value, String> {
-        Err("Windows playback required".into())
+        Err("Native desktop playback required".into())
     }
 
     pub async fn pause(&mut self) -> Result<(), String> {
@@ -317,11 +397,14 @@ impl Player {
         }
         if let Some(value) = self.property("current-ao").await? {
             self.status.output_driver = value.as_str().unwrap_or("").into();
-            if !self.status.output_driver.is_empty() && self.status.output_driver != "wasapi" {
-                return Err("Playback stopped because WASAPI output was not established".into());
+            if !self.status.output_driver.is_empty() && self.status.output_driver != output_driver()
+            {
+                return Err(
+                    "Playback stopped because direct HDMI output was not established".into(),
+                );
             }
         }
-        self.status.passthrough = self.status.output_driver == "wasapi"
+        self.status.passthrough = self.status.output_driver == output_driver()
             && matches!(
                 self.status.output_format.as_str(),
                 "spdif-eac3" | "spdif-truehd"
@@ -355,7 +438,7 @@ impl Player {
     }
 }
 
-#[cfg(all(test, windows))]
+#[cfg(all(test, any(windows, target_os = "linux")))]
 mod tests {
     use super::*;
 
@@ -409,7 +492,11 @@ mod tests {
             .play(
                 path.to_str().unwrap(),
                 &track,
-                "wasapi/spatial-deliberately-missing-endpoint",
+                if cfg!(windows) {
+                    "wasapi/spatial-deliberately-missing-endpoint"
+                } else {
+                    "alsa/hdmi:CARD=SpatialMissing,DEV=0"
+                },
             )
             .await
             .unwrap();
@@ -429,5 +516,22 @@ mod tests {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
         player.stop().await;
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn linux_rejects_shared_and_non_hdmi_outputs() {
+        for device in [
+            "alsa/default",
+            "alsa/dmix:CARD=PCH",
+            "pulse/alsa_output.hdmi",
+            "pipewire/42",
+            "alsa/iec958:CARD=PCH",
+            "alsa/hdmi:",
+            "alsa/hdmi:CARD=PCH\n",
+        ] {
+            assert!(!valid_device(device), "Unexpectedly accepted {device}");
+        }
+        assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1"));
     }
 }

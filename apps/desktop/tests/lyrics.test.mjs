@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseLrc, activeLyric } from "../src/lyrics.ts";
+import { parseLrc, activeLyric, lyricsTitle } from "../src/lyrics.ts";
 
 test("LRC handles repeated timestamps, fractions, CRLF and timed silence", () => {
   const lines = parseLrc("[ar:Spatial]\r\n[00:10.125][00:20.5] Second line\r\n[00:02.01] First line\r\n[00:25.00]\r\n[00:99.00] Invalid timestamp");
@@ -27,6 +27,24 @@ function storage() {
 }
 const track = { title: "Test & title", artist: "Spatial Test Artist", album: "Test / album", duration: 42.4 };
 const result = { id: 1, trackName: track.title, artistName: track.artist, albumName: track.album, duration: 42, instrumental: false, plainLyrics: "An original test line", syncedLyrics: "[00:02.00] An original test line" };
+
+test("lyrics searches remove the mix credit while preserving recording editions", async () => {
+  for (const title of ["Song (Mixed By Tesla)", "Song [mixed by tesla]", "Song — mixed by tesla", "mixed by tesla - Song", "Song mixed BY TESLA"])
+    assert.equal(lyricsTitle(title), "Song");
+  assert.equal(lyricsTitle("Song (Live) (Mixed By Tesla)"), "Song (Live)");
+  assert.equal(lyricsTitle("Mixed by someone else"), "Mixed by someone else");
+  assert.equal(lyricsTitle("Song -"), "Song -");
+  globalThis.localStorage = storage();
+  const urls = [];
+  globalThis.fetch = async url => { urls.push(new URL(url)); return Response.json(result); };
+  const { getLyrics } = await import("../src/lyrics.ts?mix-title-test");
+  const decorated = { ...track, title: `${track.title} (Mixed By Tesla)` };
+  await getLyrics(decorated);
+  await getLyrics(track);
+  assert.equal(urls.length, 1);
+  assert.equal(urls[0].searchParams.get("track_name"), track.title);
+  assert.equal(decorated.title, `${track.title} (Mixed By Tesla)`);
+});
 
 test("lookup encodes metadata, deduplicates requests and reuses the local cache after restart", async () => {
   globalThis.localStorage = storage();

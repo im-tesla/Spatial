@@ -33,3 +33,16 @@ test('Tauri action API download URL must identify the exact release asset', () =
   assert.throws(() => validateManifest({ ...manifest, platforms: { ...manifest.platforms, 'windows-x86_64-nsis': { ...entry, signature: 'wrong' } } }, '0.1.3', [browserUrl, apiUrl], 'signed-installer'));
   assert.throws(() => validateManifest({ ...manifest, platforms: { ...manifest.platforms, 'windows-x86_64-nsis': { ...entry, url: 'https://example.com/other.exe' } } }, '0.1.3', [browserUrl, apiUrl], 'signed-installer'));
 });
+
+test('a combined release requires the verified Linux AppImage alongside Windows', () => {
+  const windows = { url: 'https://github.com/im-tesla/Spatial/releases/download/v0.1.7/Spatial_0.1.7_x64-setup.exe', signature: 'signed-windows' };
+  const linux = { url: 'https://github.com/im-tesla/Spatial/releases/download/v0.1.7/Spatial_0.1.7_amd64.AppImage', signature: 'signed-linux' };
+  const expected = { urls: [linux.url], signature: linux.signature };
+  const manifest = { version: '0.1.7', platforms: { 'windows-x86_64': windows, 'linux-x86_64': linux, 'linux-x86_64-appimage': linux } };
+  validateManifest(manifest, '0.1.7', windows.url, windows.signature, expected);
+  for (const platforms of [ { 'linux-x86_64': linux }, { 'windows-x86_64': windows },
+    { ...manifest.platforms, 'linux-x86_64-appimage': { ...linux, signature: 'wrong' } },
+    { ...manifest.platforms, 'linux-x86_64': { ...linux, url: 'https://example.com/unverified.AppImage' } } ]) {
+    assert.throws(() => validateManifest({ ...manifest, platforms }, '0.1.7', windows.url, windows.signature, expected));
+  }
+});

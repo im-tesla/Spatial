@@ -51,3 +51,38 @@ jobs:
         with:
           name: spatial-windows-x64-installer
           path: target/release/bundle/nsis/*setup.exe
+
+  linux-desktop:
+    runs-on: ubuntu-22.04
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Linux desktop dependencies
+        run: bash tools/setup-linux-desktop.sh
+      - name: Test compressed playback and desktop
+        run: |
+          bash tools/verify-passthrough-linux.sh
+          cargo test --locked -p spatial-desktop
+          dbus-run-session -- bash -c 'printf %s spatial-ci-only | gnome-keyring-daemon --unlock --components=secrets; cargo test --locked -p spatial-desktop credentials::platform::tests -- --ignored'
+          cd apps/desktop
+          npm ci
+          npm test
+          npm run desktop:build
+      - name: Check Debian playback dependency
+        run: |
+          test "$(find target/release/bundle/deb -name '*.deb' | wc -l)" -eq 1
+          dpkg-deb --field target/release/bundle/deb/*.deb Depends | grep -w mpv
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spatial-linux-x64-desktop
+          path: |
+            target/release/bundle/appimage/*.AppImage
+            target/release/bundle/deb/*.deb

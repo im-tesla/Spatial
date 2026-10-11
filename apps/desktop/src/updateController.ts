@@ -61,7 +61,7 @@ export function createUpdateController(transport: Transport, now = Date.now) {
         verified = candidate;
         emit({ phase: "installing", version: candidate.version });
         prepared = true; await transport.prepare();
-        // On Windows the plugin launches NSIS, exits Spatial, and restarts it after installation.
+        // The transport handles platform-specific installation and relaunch.
         await candidate.install();
         emit({ phase: "installed", version: candidate.version });
         update = null;

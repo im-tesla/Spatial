@@ -1,6 +1,6 @@
 # Phone remote
 
-Spatial's Windows app can host a small remote-control website on your local network. Scan a QR code with your phone to browse the library and control the desktop player from your listening position. The Windows player continues sending the original Dolby bitstream over HDMI; the phone does not play audio.
+Spatial's desktop app can host a small remote-control website on your local network. Scan a QR code with your phone to browse the library and control the desktop player from your listening position. The desktop player continues sending the original Dolby bitstream over HDMI; the phone does not play audio.
 
 ## Connect a phone
 
@@ -8,6 +8,8 @@ Spatial's Windows app can host a small remote-control website on your local netw
 2. Choose the PC's Wi-Fi or Ethernet address, then enable the remote.
 3. Keep your phone on the same local network as the PC. Scan the QR code with the phone's camera and open the link in its browser.
 4. If Windows Firewall asks, allow Spatial on **private networks**.
+
+On Linux, allow inbound TCP 8790 from the local network if your firewall blocks the remote. No additional web server is needed.
 
 The remote opens on port **8790**. No music-server update, additional service, Docker container, account or phone app is required. Spatial must remain open on the PC. Select the HDMI output there before starting playback from the phone.
 

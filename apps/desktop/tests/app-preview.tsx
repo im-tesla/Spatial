@@ -84,6 +84,8 @@ let status: PlaybackStatus = { track_id: null, active: false, paused: false, end
   passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "updater_supported") return true;
+  if (command === "finish_update") return undefined;
   if (command === "discord_configuration") return { configured: true, enabled: discordEnabled };
   if (command === "configure_discord") { discordEnabled = payload.enabled === true; return { configured: true, enabled: discordEnabled }; }
   if (command === "plugin:updater|check") {

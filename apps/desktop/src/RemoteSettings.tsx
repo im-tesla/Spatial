@@ -37,7 +37,7 @@ export default function RemoteSettings() {
         aria-label="Enable phone remote" disabled={!native || !settings || busy || (!settings.enabled && !address)}
         onClick={() => void configure(settings?.enabled ? "stop_remote" : "start_remote")}><span /></button>
     </div>
-    {!native ? <p className="preference-note">Available in the Windows desktop app.</p> : settings && <>
+    {!native ? <p className="preference-note">Available in the desktop app.</p> : settings && <>
       {!settings.enabled && (settings.interfaces.length ? <NetworkAddressPicker interfaces={settings.interfaces}
         value={address} disabled={busy} onChange={setAddress} /> : <p className="preference-note">Connect this PC to Wi-Fi or Ethernet to use the remote.</p>)}
       {settings.enabled && <div className="remote-pairing">
@@ -51,7 +51,7 @@ export default function RemoteSettings() {
           </div>
         </div>
       </div>}
-      {settings.enabled && <p className="preference-note">If Windows asks, allow Spatial on private networks. Turning this off disconnects all phones.</p>}
+      {settings.enabled && <p className="preference-note">Allow Spatial through your firewall on private networks. Turning this off disconnects all phones.</p>}
     </>}
     {error && <p className="form-error" role="status">{error}</p>}
   </section>;

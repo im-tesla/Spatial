@@ -10,7 +10,7 @@ const controller = createUpdateController({
   check: async () => {
     const update = await check({ timeout: 15000 });
     return update && { version: update.version, download: progress => update.download(progress, { timeout: 300000 }),
-      install: () => update.install({ restartAfterInstall: true }), close: () => update.close() };
+      install: async () => { await update.install({ restartAfterInstall: true }); await call("finish_update"); }, close: () => update.close() };
   },
   prepare: () => call("prepare_update"),
   cancel: () => call("cancel_update"),
@@ -18,16 +18,20 @@ const controller = createUpdateController({
 
 export default function UpdateStatus() {
   const [state, setState] = useState(controller.snapshot);
+  const [supported, setSupported] = useState(false);
   useEffect(() => {
-    if (!enabled) return;
+    if (enabled) void call<boolean>("updater_supported").then(setSupported).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!enabled || !supported) return;
     const unsubscribe = controller.subscribe(setState);
     void controller.check();
     const timer = window.setInterval(() => void controller.check(), updateInterval);
     const onFocus = () => void controller.check();
     window.addEventListener("focus", onFocus);
     return () => { unsubscribe(); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
-  }, []);
-  if (!enabled) return null;
+  }, [supported]);
+  if (!enabled || !supported) return null;
   const installing = state.phase === "downloading" || state.phase === "installing" || state.phase === "installed";
   return <section className="client-updates" aria-label="App updates">
     {state.version && <p className="update-version">Spatial {state.version} {state.phase === "installed" ? "installed" : "available"}</p>}

@@ -192,6 +192,20 @@ async fn cancel_update(state: State<'_, NativeState>) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn updater_supported() -> bool {
+    cfg!(windows) || (cfg!(target_os = "linux") && std::env::var_os("APPIMAGE").is_some())
+}
+
+#[tauri::command]
+fn finish_update(app: tauri::AppHandle) {
+    // NSIS handles Windows relaunch; AppImage replacement needs an explicit restart.
+    #[cfg(target_os = "linux")]
+    app.restart();
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+}
+
+#[tauri::command]
 fn discord_configuration(state: State<'_, NativeState>) -> discord::Settings {
     state.discord.settings()
 }
@@ -277,6 +291,8 @@ fn main() {
             stop_playback,
             prepare_update,
             cancel_update,
+            updater_supported,
+            finish_update,
             discord_configuration,
             configure_discord,
             remote_settings,

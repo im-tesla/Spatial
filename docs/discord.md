@@ -8,6 +8,8 @@ While music plays, Discord shows **Listening to Spatial**, the track, artist, al
 
 The large image is public album artwork matched by artist and album through [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API/Search) and the [Cover Art Archive](https://musicbrainz.org/doc/Cover_Art_Archive/API). Spatial sends the album artist and title to MusicBrainz for lookup, then supplies Discord with the public cover URL. It never uploads covers from your music server. Missing, ambiguous or unavailable artwork falls back to the Spatial icon. Catalog artwork can differ from a custom or edition-specific local cover.
 
+The Windows client connects through Discord's named pipe; Linux uses its local Unix socket. Sandboxed Discord installations may hide that socket and need their own IPC permissions.
+
 Recognized edition suffixes such as `(Deluxe)` and `[Deluxe Edition]` resolve to the catalog's base album. Albums take precedence over same-name singles and live broadcasts. Front-cover thumbnails are checked for a successful image response, and their redirects are resolved before sending the public image URL to Discord.
 
 Discord controls the header wording: Listening activities use **Listening to Spatial**. The small Spatial icon has the tooltip **Listening on Spatial**. Track and artist remain the main text, with the album on the cover tooltip.

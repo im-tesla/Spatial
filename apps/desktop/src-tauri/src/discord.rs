@@ -274,11 +274,34 @@ async fn connect() -> Result<Ipc<tokio::net::windows::named_pipe::NamedPipeClien
     }
     Err("Discord is not running".into())
 }
-#[cfg(windows)]
+#[cfg(target_os = "linux")]
+async fn connect() -> Result<Ipc<tokio::net::UnixStream>, String> {
+    let mut directories = Vec::new();
+    for variable in ["XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"] {
+        if let Some(directory) = std::env::var_os(variable) {
+            directories.push(std::path::PathBuf::from(directory));
+        }
+    }
+    directories.push(std::path::PathBuf::from("/tmp"));
+    for directory in directories {
+        for index in 0..10 {
+            if let Ok(stream) =
+                tokio::net::UnixStream::connect(directory.join(format!("discord-ipc-{index}")))
+                    .await
+            {
+                let mut client = Ipc { stream };
+                client.handshake(&CONFIG.application_id).await?;
+                return Ok(client);
+            }
+        }
+    }
+    Err("Discord is not running".into())
+}
+#[cfg(any(windows, target_os = "linux"))]
 async fn run(receiver: watch::Receiver<Snapshot>) {
     run_with(receiver, artwork::Covers::new(), connect).await;
 }
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "linux", test))]
 async fn run_with<S, Open, Connecting>(
     mut receiver: watch::Receiver<Snapshot>,
     mut covers: artwork::Covers,
@@ -368,7 +391,7 @@ async fn run_with<S, Open, Connecting>(
     }
     covers.cancel();
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 async fn run(mut receiver: watch::Receiver<Snapshot>) {
     while receiver.changed().await.is_ok() {
         if receiver.borrow().shutdown {

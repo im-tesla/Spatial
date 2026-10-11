@@ -36,7 +36,7 @@ export default function DiscordSettings({ preferences }: { preferences: ReturnTy
         aria-checked={preferences.enabled} aria-label="Share listening activity on Discord" disabled={!preferences.configured || preferences.busy}
         onClick={() => void preferences.toggle()}><span /></button>
     </div>
-    {!preferences.configured && !preferences.busy && <p className="preference-note">{native ? "Discord integration is not available in this build." : "Available in the Windows desktop app."}</p>}
+    {!preferences.configured && !preferences.busy && <p className="preference-note">{native ? "Discord integration is not available in this build." : "Available in the desktop app."}</p>}
     {preferences.error && <p className="form-error" role="status">{preferences.error}</p>}
   </section>;
 }

@@ -63,11 +63,19 @@ function backoff(header: string | null, fallback: number) {
   try { localStorage.setItem(BACKOFF_KEY, String(retryAfter)); } catch { /* Retain in memory. */ }
 }
 
+export function lyricsTitle(title: string): string {
+  if (!/\bmixed\s+by\s+tesla\b/i.test(title)) return title.trim();
+  return title.replace(/(?:\(\s*mixed\s+by\s+tesla\s*\)|\[\s*mixed\s+by\s+tesla\s*\])/gi, "")
+    .replace(/\bmixed\s+by\s+tesla\b/gi, "")
+    .replace(/\s+/g, " ").replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, "").trim();
+}
+
 export function getLyrics(track: Track): Promise<Lyrics | null> {
   const duration = Math.round(track.duration);
-  if (!track.title.trim() || !track.artist.trim() || !Number.isFinite(duration) || duration < 1 || duration > 3600)
+  const title = lyricsTitle(track.title);
+  if (!title || !track.artist.trim() || !Number.isFinite(duration) || duration < 1 || duration > 3600)
     return Promise.reject(new Error("Lyrics lookup needs an artist, title and a duration between 1 second and 1 hour."));
-  const key = JSON.stringify([track.title.trim(), track.artist.trim(), track.album.trim(), duration]);
+  const key = JSON.stringify([title, track.artist.trim(), track.album.trim(), duration]);
   const saved = memory.get(key) || cacheEntries().find(entry => entry.key === key);
   if (saved && saved.expires > Date.now()) return Promise.resolve(saved.value);
   const existing = pending.get(key);
@@ -78,7 +86,7 @@ export function getLyrics(track: Track): Promise<Lyrics | null> {
     const delay = nextRequest - Date.now();
     if (delay > 0) await new Promise(resolve => setTimeout(resolve, delay));
     try {
-      const params = new URLSearchParams({ track_name: track.title.trim(), artist_name: track.artist.trim(), album_name: track.album.trim(), duration: String(duration) });
+      const params = new URLSearchParams({ track_name: title, artist_name: track.artist.trim(), album_name: track.album.trim(), duration: String(duration) });
       const response = await fetch(`https://lrclib.net/api/get?${params}`, {
         credentials: "omit", referrerPolicy: "no-referrer", signal: AbortSignal.timeout(20000),
         headers: { "Lrclib-Client": `Spatial v${appPackage.version} (app.spatial.desktop)` },

@@ -21,6 +21,8 @@ For native desktop development, use `npm run desktop:dev` instead of the build c
 
 For signed update builds and the GitHub release workflow, see [desktop updates](updates.md). Ordinary development builds do not need the private signing key.
 
+For the Linux desktop, package installation and ALSA playback checks, see the [Linux guide](linux.md).
+
 ## Local server development
 
 Install FFmpeg/FFprobe on PATH; MediaInfo is recommended. Run the following from the repository root:
@@ -66,7 +68,7 @@ To check passthrough selection and rejected PCM fallback using a compatible samp
 
 The script uses a null audio sink and a nonexistent Windows endpoint. The project owner has also verified Atmos playback through a physical HDMI connection to an AVR. Codec-specific results and the tested hardware details remain to be recorded.
 
-The [build workflow](../.github/workflows/build.yml) defines Linux server and Windows desktop checks. Its Linux runner is currently Ubuntu 22.04; that is a CI target, not a required server installation or a complete compatibility matrix.
+The [build workflow](../.github/workflows/build.yml) defines Linux server checks and Windows/Linux desktop builds. Its Linux runner is Ubuntu 22.04; that is a CI baseline, not a required server installation or a complete compatibility matrix.
 
 ## Architecture
 
@@ -74,8 +76,8 @@ The [build workflow](../.github/workflows/build.yml) defines Linux server and Wi
 | --- | --- |
 | Catalog and API | Rust, Axum, SQLite, FFprobe, optional MediaInfo, filesystem watcher and Server-Sent Events |
 | Interface | React, TypeScript, Vite, Motion, Lucide and locally bundled Inter |
-| Desktop bridge | Tauri commands, native HTTP requests and Windows Credential Manager |
-| Playback | Pinned mpv process, named-pipe IPC, compressed Dolby transport and WASAPI exclusive HDMI output |
+| Desktop bridge | Tauri commands, native HTTP requests, Windows Credential Manager or Linux Secret Service |
+| Playback | mpv process, named-pipe/Unix-socket IPC, compressed Dolby transport and WASAPI exclusive or ALSA HDMI output |
 
 Authenticated API requests return the catalog, artwork and short-lived signed playback URLs. HTTP byte ranges support buffering and seeking. Media paths are checked against the configured root. The server streams original bytes; the desktop demuxes and passes Dolby frames to the receiver.
 

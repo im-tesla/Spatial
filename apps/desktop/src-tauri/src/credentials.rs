@@ -160,13 +160,73 @@ mod platform {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
+mod platform {
+    use super::SavedConnection;
+    static ACCESS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn entry(target: &str) -> Result<keyring::Entry, String> {
+        keyring::Entry::new(target, "connection")
+            .map_err(|_| "Cannot open Spatial's desktop keyring entry.".into())
+    }
+    pub fn load(target: &str) -> Result<Option<SavedConnection>, String> {
+        let _access = ACCESS
+            .lock()
+            .map_err(|_| "Cannot access the desktop keyring")?;
+        match entry(target)?.get_secret() {
+            Ok(bytes) => serde_json::from_slice(&bytes).map(Some)
+                .map_err(|_| "The saved connection cannot be read. Enter your access token again.".into()),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err("Cannot read the desktop keyring. Start and unlock a Secret Service provider such as GNOME Keyring.".into()),
+        }
+    }
+    pub fn save(target: &str, connection: &SavedConnection) -> Result<(), String> {
+        let _access = ACCESS
+            .lock()
+            .map_err(|_| "Cannot access the desktop keyring")?;
+        let bytes =
+            serde_json::to_vec(connection).map_err(|_| "Cannot encode the saved connection")?;
+        entry(target)?.set_secret(&bytes).map_err(|_| {
+            "Cannot save the connection. Start and unlock your desktop keyring, then try again."
+                .into()
+        })
+    }
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        #[ignore = "requires an unlocked Secret Service in an isolated D-Bus session"]
+        fn linux_keyring_round_trip_overwrite_and_missing() {
+            struct Cleanup(String);
+            impl Drop for Cleanup {
+                fn drop(&mut self) {
+                    let _ = entry(&self.0).unwrap().delete_credential();
+                }
+            }
+            let target = Cleanup(format!("Spatial/test-{}", uuid::Uuid::new_v4()));
+            assert!(load(&target.0).unwrap().is_none());
+            let mut connection = SavedConnection {
+                address: "http://spatial.local:8787".into(),
+                token: "test-only-密钥-ą".into(),
+            };
+            save(&target.0, &connection).unwrap();
+            let saved = load(&target.0).unwrap().unwrap();
+            assert_eq!(saved.address, connection.address);
+            assert_eq!(saved.token, connection.token);
+            connection.token = "replacement-test-only".into();
+            save(&target.0, &connection).unwrap();
+            assert_eq!(load(&target.0).unwrap().unwrap().token, connection.token);
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 mod platform {
     use super::SavedConnection;
     pub fn load(_: &str) -> Result<Option<SavedConnection>, String> {
         Ok(None)
     }
     pub fn save(_: &str, _: &SavedConnection) -> Result<(), String> {
-        Err("Saved connections require the Windows desktop app.".into())
+        Err("Saved connections are supported on Windows and Linux.".into())
     }
 }
