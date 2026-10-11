@@ -80,6 +80,8 @@ jobs:
         run: |
           test "$(find target/release/bundle/deb -name '*.deb' | wc -l)" -eq 1
           dpkg-deb --field target/release/bundle/deb/*.deb Depends | grep -w mpv
+      - name: Start the packaged Linux desktop
+        run: bash tools/smoke-linux-desktop.sh
       - uses: actions/upload-artifact@v4
         with:
           name: spatial-linux-x64-desktop

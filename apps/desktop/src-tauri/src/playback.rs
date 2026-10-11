@@ -119,6 +119,8 @@ fn command() -> Result<Command, String> {
     }
     command.args(["--no-config", "--load-scripts=no", "--ytdl=no"]);
     #[cfg(target_os = "linux")]
+    command.arg("--alsa-resample=no");
+    #[cfg(target_os = "linux")]
     if std::env::var_os("APPIMAGE").is_some() {
         // The system player must use its own libraries, not the AppImage's GTK libraries.
         command.env_remove("LD_LIBRARY_PATH");

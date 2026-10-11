@@ -4,7 +4,7 @@ task_tmp=$(mktemp -d)
 trap 'rm -rf -- "$task_tmp"' EXIT
 ffmpeg -hide_banner -loglevel error -nostdin -f lavfi -i anullsrc=r=48000:cl=5.1 \
   -t 0.2 -c:a eac3 -f eac3 "$task_tmp/synthetic.ec3"
-task_common=(--no-config --load-scripts=no --ytdl=no --vid=no --audio-spdif=eac3,truehd --ad=- --audio-fallback-to-null=no)
+task_common=(--no-config --load-scripts=no --ytdl=no --vid=no --audio-spdif=eac3,truehd --ad=- --audio-fallback-to-null=no --alsa-resample=no)
 mpv "${task_common[@]}" --ao=null "$task_tmp/synthetic.ec3" >"$task_tmp/passthrough.log" 2>&1
 if ! grep -Eq 'AO: \[null\].*spdif-eac3' "$task_tmp/passthrough.log"; then
   cat "$task_tmp/passthrough.log"

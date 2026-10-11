@@ -206,6 +206,8 @@ jobs:
           SPATIAL_UPDATE_INSTALLER="$(find target/release/bundle/appimage -name '*.AppImage')" cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
           test "$(find target/release/bundle/deb -name '*.deb' | wc -l)" -eq 1
           dpkg-deb --field target/release/bundle/deb/*.deb Depends | grep -w mpv
+      - name: Start the packaged Linux desktop
+        run: bash tools/smoke-linux-desktop.sh
       - name: Verify combined updater manifest and publish release
         uses: actions/github-script@v7
         env:
