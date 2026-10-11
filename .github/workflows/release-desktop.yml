@@ -203,7 +203,7 @@ jobs:
       - name: Verify AppImage against the client key and check Debian dependency
         run: |
           test "$(find target/release/bundle/appimage -name '*.AppImage' | wc -l)" -eq 1
-          SPATIAL_UPDATE_INSTALLER="$(find target/release/bundle/appimage -name '*.AppImage')" cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
+          SPATIAL_UPDATE_INSTALLER="$(realpath "$(find target/release/bundle/appimage -name '*.AppImage')")" cargo test --locked -p spatial-desktop update_tests::built_installer_has_valid_versioned_signature -- --ignored
           test "$(find target/release/bundle/deb -name '*.deb' | wc -l)" -eq 1
           dpkg-deb --field target/release/bundle/deb/*.deb Depends | grep -w mpv
       - name: Start the packaged Linux desktop
@@ -214,6 +214,7 @@ jobs:
           RELEASE_ID: ${{ steps.build.outputs.releaseId }}
           WINDOWS_RELEASE_ID: ${{ needs.signed-windows.outputs.release-id }}
           RELEASE_VERSION: ${{ needs.plan.outputs.version }}
+          RELEASE_COMMIT: ${{ needs.plan.outputs.commit }}
         with:
           script: |
             const fs = require('node:fs');
@@ -246,5 +247,5 @@ jobs:
             const manifest = JSON.parse(await download(asset('latest.json')));
             validateManifest(manifest, version, [installer.browser_download_url, installer.url], windowsSignature,
               { urls: [appimage.browser_download_url, appimage.url], signature: linuxSignature });
-            const { data: published } = await github.rest.repos.updateRelease({ ...context.repo, release_id, draft: false, prerelease: false, make_latest: 'true' });
+            const { data: published } = await github.rest.repos.updateRelease({ ...context.repo, release_id, target_commitish: process.env.RELEASE_COMMIT, draft: false, prerelease: false, make_latest: 'true' });
             await core.summary.addLink(`Spatial ${version} for Windows and Linux is published`, published.html_url).write();
