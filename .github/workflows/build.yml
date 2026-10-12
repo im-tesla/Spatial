@@ -15,6 +15,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg mediainfo pkg-config
+      - name: Verify server updates preserve deployment files
+        run: bash deploy/tests/update.test.sh
       - run: cargo test --locked -p spatial-server
       - run: cargo build --locked --release -p spatial-server
       - uses: actions/upload-artifact@v4

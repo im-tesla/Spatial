@@ -41,6 +41,20 @@ project/
 
 All generated Spatial files stay in the project. Relative media and data paths resolve against the directory containing the configuration file. The process runs under the existing user account, which needs read access to the media and write access to the data directory.
 
+## Update the server
+
+For an existing Git checkout, run this from the project folder as your normal user:
+
+```bash
+bash deploy/update.sh
+```
+
+The updater fetches the current branch's configured upstream, accepts only a fast-forward update, and builds the server before replacing `bin/spatial-server`. It preserves the media directory, `spatial.toml` (including the access token), catalog and artwork. It does not clean, reset or recreate the library, and refuses upstream changes to protected deployment paths. Tracked local edits or a diverged branch stop the update for you to resolve.
+
+A running Spatial user service registered from this project is stopped only after the build succeeds, then restarted. An inactive service stays inactive. If replacement or restart fails, the updater restores the previous executable and attempts to restart it. For a manually launched server, stop the previous process and run `bash deploy/run-server.sh` after updating. A build failure leaves the installed server running.
+
+If your checkout predates this helper, run `git pull --ff-only` once to download it. The command requires Git and the same Rust/native build tools used for installation; it does not install system packages or require `sudo`. Concurrent updates are blocked by `bin/.update-lock`. If the updater is forcibly killed, verify that it is no longer running before removing the leftover lock directory.
+
 ## Configuration
 
 These are example settings; adapt the bind address and paths to the deployment:
