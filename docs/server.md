@@ -100,6 +100,8 @@ Embedded artwork is preferred. Adjacent `cover.jpg`, `cover.png` or `folder.jpg`
 
 The watcher indexes changes and sends catalog revisions to clients. A reconciliation scan also runs at the configured interval, covering filesystems where notifications are unavailable. For reliable imports, copy to an unsupported temporary extension such as `.part`, then rename to the final extension when complete. A paused copy can otherwise appear stable before it has finished.
 
+At startup the server accepts connections and serves its saved catalog while refreshing the library in the background. A first installation can initially show an empty collection; tracks appear when the scan completes. Existing clients receive the updated catalog automatically.
+
 ## Optional systemd service
 
 On hosts using systemd, register the generated unit with the user manager:

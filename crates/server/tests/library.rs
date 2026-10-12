@@ -234,6 +234,69 @@ async fn legacy_catalog_gains_metadata_version_without_losing_tracks() {
 }
 
 #[tokio::test]
+async fn startup_serves_the_saved_catalog_while_the_initial_scan_is_pending() {
+    let (root, state, path) = fixture().await;
+    scanner::scan(&state).await.unwrap();
+    let initial = db::library(&state.pool).await.unwrap();
+    state.pool.close().await;
+    // Ensure the startup scan has work and waits long enough to expose the old
+    // behavior: it used to delay binding the HTTP port until the scan completed.
+    tokio::fs::copy(&path, path.with_file_name("new-track.m4a"))
+        .await
+        .unwrap();
+    let socket = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = socket.local_addr().unwrap();
+    drop(socket);
+    let configuration = root.path().join("spatial.toml");
+    let settings = json!({
+        "bind": address.to_string(),
+        "media_dir": root.path().join("media").to_string_lossy(),
+        "data_dir": root.path().join("data").to_string_lossy(),
+        "api_token": TOKEN,
+        "settle_ms": 15000,
+        "remote_artwork": false,
+    });
+    std::fs::write(&configuration, toml::to_string(&settings).unwrap()).unwrap();
+    let mut child = scanner::process(env!("CARGO_BIN_EXE_spatial-server"))
+        .arg("--config")
+        .arg(configuration)
+        .env_remove("SPATIAL_API_TOKEN")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(1))
+        .build()
+        .unwrap();
+    let response = tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if let Ok(response) = client
+                .get(format!("http://{address}/api/library"))
+                .bearer_auth(TOKEN)
+                .send()
+                .await
+            {
+                break response
+                    .error_for_status()
+                    .unwrap()
+                    .json::<Library>()
+                    .await
+                    .unwrap();
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    // Stop the child even if startup failed, before checking the result.
+    child.kill().await.unwrap();
+    let served = response.expect("HTTP must be available before the 15-second scan wait");
+    assert_eq!(served.revision, initial.revision);
+    assert_eq!(served.tracks.len(), 1);
+    assert_eq!(served.tracks[0].id, initial.tracks[0].id);
+}
+
+#[tokio::test]
 async fn indexing_is_incremental_and_preserves_ids_on_moves() {
     let (_root, state, path) = fixture().await;
     assert_eq!(scanner::scan(&state).await.unwrap(), 1);

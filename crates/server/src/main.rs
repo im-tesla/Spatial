@@ -38,10 +38,10 @@ async fn main() -> Result<()> {
     let state = AppState::new(config)
         .await
         .context("Cannot initialize Spatial")?;
-    tracing::info!(media = %state.media_root.display(), "Indexing media");
-    scanner::scan(&state).await?;
     let listener = tokio::net::TcpListener::bind(bind).await?;
-    tracing::info!(%bind, "Spatial is ready");
+    tracing::info!(%bind, "Spatial is ready; library refresh runs in the background");
+    // watch's first interval tick scans immediately. Serve the existing catalog
+    // while it runs, rather than blocking connections on a full-library refresh.
     let task = tokio::spawn(scanner::watch(state.clone()));
     axum::serve(listener, http::router(state))
         .with_graceful_shutdown(shutdown())
