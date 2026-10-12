@@ -3,8 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence, LayoutGroup, MotionConfig, motion, useReducedMotion } from "motion/react";
 import { DialogTransition, ease, LyricsSlot, PageTransition, spring } from "./motion";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Disc3, Headphones, Heart, Layers3, LibraryBig,
-  ListMusic, LoaderCircle, Mic2, Pause, Play, Repeat, Repeat1, Search, Settings2, Shuffle, SkipBack,
-  SkipForward, Speaker, Volume2, Waves, X } from "lucide-react";
+  ListMusic, LoaderCircle, Maximize2, Mic2, Pause, Play, Search, Settings2, Shuffle, Speaker, Volume2, Waves, X } from "lucide-react";
 import { call, native, onEvent } from "./api";
 import { emptyFavorites, loadFavorites, saveFavorites } from "./favorites";
 import type { Favorites } from "./favorites";
@@ -14,7 +13,10 @@ import DiscordSettings, { useDiscordPreferences } from "./DiscordSettings";
 import RemoteSettings from "./RemoteSettings";
 import { remotePlaySelection } from "./remoteControl";
 import type { RemoteCommand } from "./remoteControl";
-import { getArtwork } from "./artwork";
+import Cover from "./Cover";
+import FullscreenPlayer from "./FullscreenPlayer";
+import { FavoriteButton, formatTime as time, PlaybackControls, PlaybackProgress } from "./PlayerControls";
+import { useListeningMode } from "./useListeningMode";
 import LyricsSidebar from "./LyricsSidebar";
 import { clampLyricsWidth, loadLyricsWidth, maxLyricsWidth } from "./lyricsLayout";
 import { useArtworkTheme } from "./useArtworkTheme";
@@ -22,41 +24,10 @@ import type { Album, AudioDevice, Library, PlaybackStatus, RememberedConnection,
 
 const emptyStatus: PlaybackStatus = { track_id: null, active: false, paused: false, ended: false,
   position: 0, duration: 0, passthrough: false, output_format: "", output_driver: "", error: null };
-const time = (value: number) => `${Math.floor(value / 60)}:${Math.floor(value % 60).toString().padStart(2, "0")}`;
 const year = (date: string) => date.match(/^\d{4}/)?.[0] || "";
-
-function Cover({ id, title, className = "" }: { id: string | null; title: string; className?: string }) {
-  const [image, setImage] = useState<{ id: string; url: string } | null>(null);
-  const reduced = useReducedMotion();
-  useEffect(() => {
-    let active = true;
-    if (id) {
-      getArtwork(id).then(async url => {
-        const decoded = new Image(); decoded.src = url; await decoded.decode();
-        if (active) setImage({ id, url });
-      }).catch(() => { if (active) setImage(null); });
-    } else setImage(null);
-    return () => { active = false; };
-  }, [id]);
-  return <div className={`cover ${className}`}><Disc3 aria-hidden="true" /><AnimatePresence initial={false}>
-    {image && <motion.img key={image.id} src={image.url} alt={`${title} artwork`}
-      initial={{ opacity: 0, scale: reduced ? 1 : 1.025 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}
-      transition={{ duration: reduced ? 0 : .4, ease }} />}
-  </AnimatePresence></div>;
-}
 
 function AtmosBadge({ small = false }: { small?: boolean }) {
   return <span className={`atmos-badge ${small ? "small" : ""}`}><Layers3 size={small ? 10 : 13} /> DOLBY ATMOS</span>;
-}
-
-function FavoriteButton({ active, label, onClick, disabled = false }: { active: boolean; label: string; onClick: () => void; disabled?: boolean }) {
-  const reduced = useReducedMotion();
-  return <motion.button className={`icon-button favorite-button ${active ? "is-favorite" : ""}`} aria-pressed={active}
-    whileTap={disabled || reduced ? undefined : { scale: .88 }}
-    aria-label={`${active ? "Remove" : "Add"} ${label} ${active ? "from" : "to"} favorites`} onClick={onClick} disabled={disabled}>
-    <motion.span className="favorite-glyph" initial={false} animate={{ scale: active && !reduced ? [1, 1.22, 1] : 1 }}
-      transition={{ duration: reduced ? 0 : .32, ease }}><Heart size={16} fill={active ? "currentColor" : "none"} /></motion.span>
-  </motion.button>;
 }
 
 export default function App() {
@@ -82,6 +53,7 @@ function shuffleList<T>(items: T[]): T[] {
 
 function AppContent() {
   const reduced = useReducedMotion();
+  const listening = useListeningMode();
   const discordPreferences = useDiscordPreferences();
   const [catalog, setCatalog] = useState<Library | null>(null);
   const [address, setAddress] = useState(localStorage.getItem("spatial-server") || (native ? "" : "http://127.0.0.1:8787"));
@@ -507,7 +479,15 @@ function AppContent() {
   const collectionTools = (compact = false) => catalog && <CollectionTools catalog={catalog} favorites={favorites}
     selected={visibleSelection} visible={visibleItems} selecting={selecting} sharing={!selected && view === "favorites"}
     compact={compact} onMode={setSelecting} onSelect={setSelection} onUpdate={persistFavorites} />;
-  const seekFill = Math.max(0, Math.min(100, (seekPosition ?? status.position) / (status.duration || current?.duration || 1) * 100));
+  const playbackControls = {
+    playing: status.active && !status.paused, starting, hasTrack: !!current,
+    canPrevious: queueIndex > 0 || repeat === "all" || status.position > 3,
+    canNext: queueIndex + 1 < queue.length || repeat === "all", shuffle, repeat,
+    onShuffle: toggleShuffle, onRepeat: toggleRepeat, onPrevious: handlePrevious, onNext: handleNext,
+    onPlay: () => status.active ? void action("toggle_pause") : void start(queue, queueIndex),
+  };
+  const playbackProgress = { position: seekPosition ?? status.position, duration: status.duration || current?.duration || 0,
+    disabled: !status.active || starting, onScrub: setSeekPosition, onSeek: commitSeek };
 
   if (!catalog) return <motion.main className="connect-screen" data-reduced-motion={reduced ? "true" : undefined} style={theme as CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease }}>
     <div className="connect-art"><div className="orbital orbital-one" /><div className="orbital orbital-two" /><div className="orbital orbital-three" />
@@ -528,7 +508,7 @@ function AppContent() {
 
   return <motion.div className={`app-shell ${lyricsOpen ? "lyrics-open" : ""}`} data-reduced-motion={reduced ? "true" : undefined} style={{ ...theme, "--lyrics-width": `${panelWidth}px`, "--lyrics-space": lyricsOpen ? `${panelWidth}px` : "0px" } as CSSProperties}
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .4, ease }}>
-    <aside className="sidebar"><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><span>spatial<span className="brand-dot">.</span></span></button>
+    <aside className="sidebar" inert={listening.open}><button className="brand" onClick={() => { setSelectedAlbum(null); setView("albums"); setSearch(""); }}><span>spatial<span className="brand-dot">.</span></span></button>
       <span className="nav-label">YOUR COLLECTION</span><nav>
         <NavItem active={view === "albums"} onClick={() => { setView("albums"); setSelectedAlbum(null); setSearch(""); }}><LibraryBig size={19} /> Albums <span>{catalog.albums.length}</span></NavItem>
         <NavItem active={view === "tracks"} onClick={() => { setView("tracks"); setSelectedAlbum(null); setSearch(""); }}><ListMusic size={19} /> All tracks <span>{catalog.tracks.length}</span></NavItem>
@@ -542,7 +522,7 @@ function AppContent() {
         <UpdateStatus />
       </div>
     </aside>
-    <main ref={mainRef} className="main-content"><header className="topbar">
+    <main ref={mainRef} className="main-content" inert={listening.open}><header className="topbar">
       <label className="search-box"><Search size={17} /><input aria-label="Search your library" placeholder="Search your collection" value={search} onChange={e => setSearch(e.target.value)} />{search && <button aria-label="Clear search" onClick={() => setSearch("")}><X size={15} /></button>}</label>
     </header>
       <AnimatePresence initial={false}>{error && <motion.div className="error-banner" role="alert" initial={{ opacity: 0, y: reduced ? 0 : -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: reduced ? 0 : .2 }}><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}><X size={17} /></button></motion.div>}</AnimatePresence>
@@ -566,37 +546,23 @@ function AppContent() {
       </section>}
       </PageTransition></AnimatePresence>
     </main>
-    <AnimatePresence initial={false}>{lyricsOpen && <LyricsSlot key="lyrics"><LyricsSidebar width={panelWidth} maximum={maximumLyricsWidth} onResize={resizeLyrics} onClose={closeLyrics}
+    <AnimatePresence initial={false}>{lyricsOpen && !listening.open && <LyricsSlot key="lyrics"><LyricsSidebar width={panelWidth} maximum={maximumLyricsWidth} onResize={resizeLyrics} onClose={closeLyrics}
       track={lyricsTrack} position={status.track_id === lyricsTrack?.id ? status.position : 0}
-      playing={status.track_id === lyricsTrack?.id && status.active} onSeek={seconds => void action("seek", { seconds })} /></LyricsSlot>}</AnimatePresence>
-    <footer className="player-bar"><div className="now-playing">{current ? <Cover id={current.artwork_id} title={current.title} /> : <div className="idle-cover"><Headphones size={24} /></div>}
+      playing={status.track_id === lyricsTrack?.id && status.active} paused={status.paused} onSeek={commitSeek} /></LyricsSlot>}</AnimatePresence>
+    <footer className="player-bar" inert={listening.open}><div className="now-playing">{current ? <Cover id={current.artwork_id} title={current.title} /> : <div className="idle-cover"><Headphones size={24} /></div>}
       <AnimatePresence initial={false} mode="wait"><motion.div className="now-playing-label" key={current?.id || "idle"}
         initial={{ opacity: 0, y: reduced ? 0 : 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -3 }} transition={{ duration: reduced ? 0 : .16, ease }}>
         <strong>{current?.title || "Find your next dimension"}</strong><span>{current?.artist || "Choose an album to start listening"}</span>
       </motion.div></AnimatePresence><FavoriteButton active={!!current && favorites.tracks.includes(current.id)} label={current ? `track ${current.title}` : "current track"} disabled={!current} onClick={() => { if (current) toggleFavorite("tracks", current.id); }} /></div>
-      <div className="transport"><div className="transport-buttons">
-        <button className={`icon-button ${shuffle ? "is-active" : ""}`} aria-label={shuffle ? "Disable shuffle" : "Enable shuffle"} title={shuffle ? "Shuffle: On" : "Shuffle: Off"} onClick={toggleShuffle}>
-          <Shuffle size={17} />
-        </button>
-        <button className="icon-button" aria-label="Previous track" disabled={!current || starting || (queueIndex <= 0 && repeat !== "all" && status.position <= 3)} onClick={handlePrevious}>
-          <SkipBack size={18} fill="currentColor" />
-        </button>
-        <motion.button className="play-button" aria-label={status.active && !status.paused ? "Pause" : "Play"} whileTap={!current || starting || reduced ? undefined : { scale: .9 }} disabled={!current || starting} onClick={() => status.active ? void action("toggle_pause") : void start(queue, queueIndex)}>
-          <AnimatePresence initial={false} mode="wait"><motion.span className="play-glyph" key={starting ? "loading" : status.active && !status.paused ? "pause" : "play"}
-            initial={{ opacity: 0, scale: reduced ? 1 : .8, rotate: reduced ? 0 : -12 }} animate={{ opacity: 1, scale: 1, rotate: 0 }} exit={{ opacity: 0, scale: reduced ? 1 : .8 }} transition={{ duration: reduced ? 0 : .12, ease }}>
-            {starting ? <LoaderCircle className="spin" size={20} /> : status.active && !status.paused ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-          </motion.span></AnimatePresence>
-        </motion.button>
-        <button className="icon-button" aria-label="Next track" disabled={!current || starting || (queueIndex + 1 >= queue.length && repeat !== "all")} onClick={handleNext}>
-          <SkipForward size={18} fill="currentColor" />
-        </button>
-        <button className={`icon-button ${repeat !== "off" ? "is-active" : ""}`} aria-label={repeat === "one" ? "Repeat: Current track" : repeat === "all" ? "Repeat: Entire queue" : "Repeat: Off"} title={repeat === "one" ? "Repeat: One" : repeat === "all" ? "Repeat: All" : "Repeat: Off"} onClick={toggleRepeat}>
-          {repeat === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}
-        </button>
+      <div className="transport"><PlaybackControls {...playbackControls} /><PlaybackProgress {...playbackProgress} /></div>
+      <div className="player-details"><button ref={lyricsToggleRef} className={`icon-button ${lyricsOpen ? "is-active" : ""}`} aria-label={lyricsOpen ? "Close lyrics" : "Open lyrics"} aria-pressed={lyricsOpen} aria-controls="lyrics-sidebar" onClick={() => { setLyricsOpen(open => !open); }}><Mic2 size={18} /></button><button className="icon-button" aria-label="Receiver output settings" title="Control volume on your receiver" onClick={() => setModal("output")}><Volume2 size={18} /></button><button className={`icon-button ${view === "queue" ? "is-active" : ""}`} aria-label="Open queue" onClick={openQueue}><ListMusic size={19} /></button>
+        <button className="icon-button" aria-label="Open fullscreen player" title="Fullscreen player" disabled={!current} onClick={() => { setModal(null); listening.enter(); }}><Maximize2 size={18} /></button>
       </div>
-        <div className="progress"><span>{time(seekPosition ?? status.position)}</span><input aria-label="Playback position" aria-valuetext={`${time(seekPosition ?? status.position)} of ${time(status.duration || current?.duration || 0)}`} style={{ "--seek-fill": `${seekFill}%` } as CSSProperties} type="range" min={0} max={status.duration || current?.duration || 1} step={0.1} value={seekPosition ?? status.position} disabled={!status.active || starting} onChange={e => setSeekPosition(Number(e.target.value))} onPointerUp={e => commitSeek(Number(e.currentTarget.value))} onKeyUp={e => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) commitSeek(Number(e.currentTarget.value)); }} /><span>{time(status.duration || current?.duration || 0)}</span></div>
-      </div><div className="player-details"><button ref={lyricsToggleRef} className={`icon-button ${lyricsOpen ? "is-active" : ""}`} aria-label={lyricsOpen ? "Close lyrics" : "Open lyrics"} aria-pressed={lyricsOpen} aria-controls="lyrics-sidebar" onClick={() => { setLyricsOpen(open => !open); }}><Mic2 size={18} /></button><button className="icon-button" aria-label="Receiver output settings" title="Control volume on your receiver" onClick={() => setModal("output")}><Volume2 size={18} /></button><button className={`icon-button ${view === "queue" ? "is-active" : ""}`} aria-label="Open queue" onClick={openQueue}><ListMusic size={19} /></button></div>
     </footer>
+    <AnimatePresence>{listening.open && current && <FullscreenPlayer key="fullscreen-player" track={current}
+      active={status.active && status.track_id === current.id} position={status.track_id === current.id ? status.position : 0}
+      controls={playbackControls} progress={playbackProgress} favorite={favorites.tracks.includes(current.id)}
+      onFavorite={() => toggleFavorite("tracks", current.id)} onClose={listening.close} onSeek={commitSeek} error={listening.error || error} />}</AnimatePresence>
     <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><RemoteSettings /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
     {modal === "output" && <DialogTransition key="output" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><div><span className="eyebrow">DIRECT TO YOUR RECEIVER</span><h2 id="modal-title">Audio output</h2></div><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div>
       <p className="modal-description">Select the HDMI output connected to your Atmos receiver. Spatial requests direct Dolby passthrough.</p><div className="output-mode"><Layers3 size={20} /><div><strong>Original Dolby bitstream</strong><span>E-AC-3 / TrueHD · receiver controls volume</span></div><span className="mode-pill">EXCLUSIVE</span></div>

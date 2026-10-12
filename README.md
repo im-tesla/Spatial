@@ -16,7 +16,8 @@ The server discovers albums from file metadata and keeps connected clients up to
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
 - **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “mixed by tesla” in their titles, regardless of capitalization.
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
-- **Follow the words.** Synced lyrics appear in a resizable side panel. Click a line to seek, or keep browsing while the song continues.
+- **Follow the words.** [Synced lyrics](docs/lyrics.md) use glowing line highlights, soft focus and cover-colored backgrounds in the resizable side panel and fullscreen player. Click a line to seek, or keep browsing while the song continues.
+- **Fill the screen with the music.** Open the [fullscreen player](docs/fullscreen.md) for large album artwork, playback controls, and animated lyrics against a moving album-colored background.
 - **Keep listening.** Build a playback queue, move between tracks, and reopen the app with the server connection remembered securely.
 - **Stay in your listening spot.** Enable the [phone remote](docs/remote.md), scan a QR code, and browse your collection or control the desktop player from a phone on the same network.
 - **Share your listening.** [Discord activity](docs/discord.md) shows the current track, public album artwork and playback progress. Enabled by default, with a saved opt-out.
@@ -34,7 +35,13 @@ Artwork, release information and the track list stay together in the album view.
 
 The queue lives in the main view. Lyrics sit beside it, with adjustable width and a highlight that follows playback.
 
-![Spatial playback queue beside synced lyrics](docs/screenshots/readme-lyrics.png)
+![Spatial playback queue beside synced lyrics](docs/screenshots/beautiful-lyrics-sidebar.jpg)
+
+### Fullscreen listening
+
+Album artwork and controls sit beside large synced lyrics. The current line glides into focus, with colors and ambient motion drawn from the album cover.
+
+![Spatial fullscreen player with artwork and animated lyrics](docs/screenshots/fullscreen-listening.jpg)
 
 ### A remote from your listening spot
 
@@ -79,7 +86,7 @@ This is an early preview. Playback currently supports the compressed E-AC-3 and 
 
 Albums are grouped by metadata rather than folder names. Consistent album, album-artist, date and release tags produce the best results. Embedded artwork is preferred, with adjacent cover images as a fallback.
 
-Favorites, panel width and output preferences stay on the client. Lyrics use [LRCLIB](https://lrclib.net/), with no account or API key: opening the panel may send the track's title, artist, album and duration to the provider. Audio files and server credentials are not sent. Cached lyrics remain available offline; coverage depends on the recording.
+Favorites, panel width and output preferences stay on the client. Lyrics use [LRCLIB](https://lrclib.net/), with no account or API key: opening lyrics or the fullscreen player may send the track's title, artist, album and duration to the provider. Audio files and server credentials are not sent. Cached lyrics remain available offline; coverage depends on the recording.
 
 In Favorites, **Copy favorites** creates a portable list that another client can paste into **Import favorites**. Matching albums and tracks already in that client's library are saved locally. Use **Select** to add or remove favorites in bulk, or copy just a selection. See the [favorites guide](docs/favorites.md) for details.
 

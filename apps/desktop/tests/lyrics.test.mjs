@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseLrc, activeLyric, lyricsTitle } from "../src/lyrics.ts";
+import { parseLrc, activeLyric, lyricsTitle, lyricLineProgress } from "../src/lyrics.ts";
 
 test("LRC handles repeated timestamps, fractions, CRLF and timed silence", () => {
   const lines = parseLrc("[ar:Spatial]\r\n[00:10.125][00:20.5] Second line\r\n[00:02.01] First line\r\n[00:25.00]\r\n[00:99.00] Invalid timestamp");
@@ -19,6 +19,18 @@ test("highlighting respects timestamp boundaries, backward seeks and silence", (
   assert.equal(activeLyric(lines, 7), 2);
   assert.equal(activeLyric(lines, 3), 0);
   assert.equal(activeLyric([], 100), -1);
+});
+
+test("line illumination follows real cue boundaries and snaps correctly after seeks", () => {
+  assert.equal(lyricLineProgress(1, 2, 6), 0);
+  assert.equal(lyricLineProgress(2, 2, 6), 0);
+  assert.equal(lyricLineProgress(4, 2, 6), .5);
+  assert.equal(lyricLineProgress(6, 2, 6), 1);
+  assert.equal(lyricLineProgress(10, 2, 6), 1);
+  assert.equal(lyricLineProgress(3, 2, 6), .25);
+  assert.equal(lyricLineProgress(2, 2, 2), 1);
+  assert.equal(lyricLineProgress(NaN, 2, 6), 0);
+  assert.equal(lyricLineProgress(3, 2, Infinity), 0);
 });
 
 function storage() {

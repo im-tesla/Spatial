@@ -24,6 +24,12 @@ export function activeLyric(lines: LyricLine[], position: number): number {
   return low - 1;
 }
 
+export function lyricLineProgress(position: number, start: number, end: number): number {
+  if (![position, start, end].every(Number.isFinite) || position < start) return 0;
+  if (end <= start) return 1;
+  return Math.max(0, Math.min(1, (position - start) / (end - start)));
+}
+
 const CACHE_KEY = "spatial-lyrics:v1";
 const BACKOFF_KEY = "spatial-lyrics-retry-after";
 type Entry = { key: string; expires: number; value: Lyrics | null };

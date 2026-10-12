@@ -1,12 +1,13 @@
 // Development-only fixture: production App, mocked native IPC, no audio or network requests.
 import { createRoot } from "react-dom/client";
 import { StrictMode } from "react";
-import { mockIPC } from "@tauri-apps/api/mocks";
+import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Library, PlaybackStatus, Track } from "../src/types";
 import appPackage from "../package.json";
 import "../src/styles.css";
 
 Object.assign(window, { isTauri: true });
+mockWindows("main");
 // Simulate the OS preference without changing the user's Windows settings.
 if (new URLSearchParams(location.search).get("motion") === "reduced") {
   const matchMedia = window.matchMedia.bind(window);
@@ -21,6 +22,7 @@ const albums = [
   { id: "fixture-sun", title: "Sun Room", artist: "Spatial", date: "2025", track_count: 1, duration: 20, atmos: true, artwork_id: "fixture-orange" },
 ];
 const showcase = new URLSearchParams(location.search).has("showcase");
+const lyricsScenario = new URLSearchParams(location.search).get("lyrics");
 const friendLibrary = new URLSearchParams(location.search).get("library") === "friend";
 if (showcase) albums.push(
   { id: "fixture-tidal", title: "Tidal Forms", artist: "Lowlight", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-blue" },
@@ -50,11 +52,14 @@ if (friendLibrary) {
   for (const album of albums) album.id = `friend-${album.id}`;
   for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
 }
+if (lyricsScenario) for (const track of tracks) track.title += ` · ${lyricsScenario} lyrics preview`;
+if (new URLSearchParams(location.search).has("long-title")) tracks[0].title = "A very long recording title, with an extended edition and a little more room for the music to breathe";
 const library: Library = { revision: 1, albums, tracks };
 const connectionScenario = new URLSearchParams(location.search).get("connection");
 const updateScenario = new URLSearchParams(location.search).get("updates");
 let restoreCalls = 0;
 let discordEnabled = false;
+let fullscreen = false;
 const previewUpdateVersion = appPackage.version.replace(/\d+$/, patch => String(Number(patch) + 1));
 const covers = new Map<string, string>();
 for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fixture-orange", "#b56937", "#292025"],
@@ -82,8 +87,15 @@ for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fix
 }
 let status: PlaybackStatus = { track_id: null, active: false, paused: false, ended: false, position: 0, duration: 0,
   passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
+if (new URLSearchParams(location.search).has("clock")) window.setInterval(() => {
+  if (!status.active || status.paused) return;
+  const position = Math.min(status.duration, status.position + .1);
+  status = { ...status, position, active: position < status.duration, ended: position >= status.duration };
+}, 100);
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "plugin:window|is_fullscreen") return fullscreen;
+  if (command === "plugin:window|set_fullscreen") { fullscreen = payload.value === true; console.info(`Fixture fullscreen ${fullscreen}`); return; }
   if (command === "updater_supported") return true;
   if (command === "finish_update") return undefined;
   if (command === "discord_configuration") return { configured: true, enabled: discordEnabled };
@@ -122,7 +134,7 @@ mockIPC((command, args) => {
   if (command === "get_artwork") return covers.get(String(payload.id));
   if (command === "audio_devices") return [{ name: "fixture-hdmi", description: "Simulated HDMI endpoint" }];
   if (command === "playback_status") return { ...status };
-  if (command === "play_track") status = { ...status, track_id: String(payload.id), active: true, paused: false, position: 4,
+  if (command === "play_track") status = { ...status, track_id: String(payload.id), active: true, paused: false, ended: false, position: 4,
     duration: tracks.find(track => track.id === payload.id)?.duration || 20 };
   if (command === "seek") status = { ...status, position: Number(payload.seconds) };
   if (command === "toggle_pause") status = { ...status, paused: !status.paused };
@@ -131,8 +143,11 @@ mockIPC((command, args) => {
 const realFetch = window.fetch;
 window.fetch = async (input, options) => {
   if (!String(input).startsWith("https://lrclib.net/api/get?")) return realFetch(input, options);
-  return Response.json({ id: 987654322, duration: 20, instrumental: false, plainLyrics: null,
-    syncedLyrics: "[00:01.00] A quiet room\n[00:04.00] The lights turn green\n[00:08.00] A little space to breathe\n[00:12.00] Every note comes home\n[00:16.00] And the room opens up\n[00:19.00]" });
+  if (lyricsScenario === "missing") return new Response(null, { status: 404 });
+  if (lyricsScenario === "offline") throw new TypeError("Synthetic offline lyrics fixture");
+  return Response.json({ id: 987654322, duration: 20, instrumental: lyricsScenario === "instrumental",
+    plainLyrics: lyricsScenario === "plain" ? "A quiet room\nThe lights turn green\nA little space to breathe\nEvery note comes home\nAnd the room opens up" : null,
+    syncedLyrics: !lyricsScenario ? "[00:01.00] A quiet room\n[00:04.00] The lights turn green\n[00:08.00] A little space to breathe\n[00:12.00] Every note comes home\n[00:16.00] And the room opens up\n[00:19.00]" : null });
 };
 const { default: App } = await import("../src/App");
 createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
