@@ -32,6 +32,18 @@ pub async fn open(data_dir: &Path) -> Result<SqlitePool> {
             album_id TEXT PRIMARY KEY, attempted_at INTEGER NOT NULL, found INTEGER NOT NULL, artwork_id TEXT
         );"
     ).execute(&pool).await?;
+    // Existing catalogs need one metadata refresh when tag interpretation changes.
+    let columns = sqlx::query("PRAGMA table_info(tracks)")
+        .fetch_all(&pool)
+        .await?;
+    if !columns
+        .iter()
+        .any(|row| row.get::<&str, _>("name") == "metadata_version")
+    {
+        sqlx::query("ALTER TABLE tracks ADD COLUMN metadata_version INTEGER NOT NULL DEFAULT 0")
+            .execute(&pool)
+            .await?;
+    }
     Ok(pool)
 }
 

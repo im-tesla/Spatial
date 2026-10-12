@@ -80,6 +80,8 @@ Enter the same access token configured on the server. After a successful connect
 
 Place tagged audio files in the configured media directory. Albums use album, album artist, artist, date, disc, track and release identifiers. Folder and filename conventions are optional. Missing tags use Unknown artist/album and the filename as the title; compilation tags support Various Artists.
 
+For MP4/M4A files, the standard title (`©nam`, also displayed by Windows file properties) takes precedence over conflicting freeform `TITLE` tags. Spatial Mixes includes tracks whose title contains `mixed by tesla`, regardless of capitalization. Existing MP4 catalog entries are refreshed automatically on the first scan after this metadata-reader update, preserving track IDs and favorites.
+
 Embedded artwork is preferred. Adjacent `cover.jpg`, `cover.png` or `folder.jpg` is a fallback. Source files are never rewritten or transcoded. Conflicting dates or release identifiers can split editions into separate albums; Spatial does not retag files or fetch replacement metadata.
 
 The watcher indexes changes and sends catalog revisions to clients. A reconciliation scan also runs at the configured interval, covering filesystems where notifications are unavailable. For reliable imports, copy to an unsupported temporary extension such as `.part`, then rename to the final extension when complete. A paused copy can otherwise appear stable before it has finished.

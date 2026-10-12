@@ -126,6 +126,114 @@ fn atmos_requires_explicit_bitstream_evidence_and_albums_use_tags() {
 }
 
 #[tokio::test]
+async fn standard_mp4_title_wins_and_cached_tracks_are_refreshed_once() {
+    let (_root, state, path) = fixture().await;
+    let config = mp4ameta::ReadConfig {
+        read_meta_items: true,
+        ..mp4ameta::ReadConfig::NONE
+    };
+    let mut tags = mp4ameta::Tag::read_with_path(&path, &config).unwrap();
+    tags.set_title("Metadata track (mixed by tesla)");
+    tags.set_data(
+        mp4ameta::FreeformIdent::new_static("com.apple.iTunes", "TITLE"),
+        mp4ameta::Data::Utf8("Metadata track".into()),
+    );
+    tags.userdata.write_to_path(&path).unwrap();
+
+    // Reproduce the actual demuxer conflict, rather than only mocking its JSON.
+    let output = scanner::process("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format_tags=title",
+            "-of",
+            "json",
+        ])
+        .arg(&path)
+        .output()
+        .await
+        .unwrap();
+    assert!(output.status.success());
+    let probe: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        probe["format"]["tags"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|value| value == "Metadata track")
+    );
+
+    assert_eq!(scanner::scan(&state).await.unwrap(), 1);
+    let initial = db::library(&state.pool).await.unwrap();
+    assert_eq!(initial.tracks[0].title, "Metadata track (mixed by tesla)");
+    assert_eq!(initial.tracks[0].album, "Tagged Album");
+    assert_eq!(initial.tracks[0].codec, "eac3");
+    assert!(!initial.tracks[0].atmos);
+
+    // Simulate a catalog created by the old reader without changing the file.
+    let mut stale = initial.tracks[0].clone();
+    stale.title = "Metadata track".into();
+    sqlx::query("UPDATE tracks SET metadata=?,metadata_version=0 WHERE id=?")
+        .bind(serde_json::to_string(&stale).unwrap())
+        .bind(&stale.id)
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    assert_eq!(scanner::scan(&state).await.unwrap(), 1);
+    let refreshed = db::library(&state.pool).await.unwrap();
+    assert_eq!(refreshed.tracks[0].title, initial.tracks[0].title);
+    assert_eq!(refreshed.tracks[0].id, initial.tracks[0].id);
+    assert_eq!(refreshed.tracks[0].album_id, initial.tracks[0].album_id);
+    assert_eq!(refreshed.revision, initial.revision + 1);
+    assert_eq!(scanner::scan(&state).await.unwrap(), 0);
+    state.pool.close().await;
+}
+
+#[tokio::test]
+async fn mp4_without_a_standard_title_keeps_the_ffprobe_fallback() {
+    let (_root, state, path) = fixture().await;
+    let config = mp4ameta::ReadConfig {
+        read_meta_items: true,
+        ..mp4ameta::ReadConfig::NONE
+    };
+    let mut tags = mp4ameta::Tag::read_with_path(&path, &config).unwrap();
+    tags.remove_title();
+    tags.set_data(
+        mp4ameta::FreeformIdent::new_static("com.apple.iTunes", "TITLE"),
+        mp4ameta::Data::Utf8("Freeform-only title".into()),
+    );
+    tags.userdata.write_to_path(&path).unwrap();
+    scanner::scan(&state).await.unwrap();
+    let catalog = db::library(&state.pool).await.unwrap();
+    assert_eq!(catalog.tracks[0].title, "Freeform-only title");
+    state.pool.close().await;
+}
+
+#[tokio::test]
+async fn legacy_catalog_gains_metadata_version_without_losing_tracks() {
+    let (root, state, _path) = fixture().await;
+    scanner::scan(&state).await.unwrap();
+    let initial = db::library(&state.pool).await.unwrap();
+    sqlx::query("ALTER TABLE tracks DROP COLUMN metadata_version")
+        .execute(&state.pool)
+        .await
+        .unwrap();
+    state.pool.close().await;
+    let pool = db::open(&root.path().join("data")).await.unwrap();
+    let version: i64 = sqlx::query_scalar("SELECT metadata_version FROM tracks")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(version, 0);
+    assert_eq!(
+        db::library(&pool).await.unwrap().tracks[0].id,
+        initial.tracks[0].id
+    );
+    pool.close().await;
+}
+
+#[tokio::test]
 async fn indexing_is_incremental_and_preserves_ids_on_moves() {
     let (_root, state, path) = fixture().await;
     assert_eq!(scanner::scan(&state).await.unwrap(), 1);

@@ -41,6 +41,43 @@ fn ordinal(value: &str) -> u32 {
     value.split('/').next().unwrap_or("").parse().unwrap_or(0)
 }
 
+const METADATA_VERSION: i64 = 1;
+
+fn is_mp4(path: &Path) -> bool {
+    path.extension().is_some_and(|extension| {
+        extension.eq_ignore_ascii_case("m4a") || extension.eq_ignore_ascii_case("mp4")
+    })
+}
+
+async fn preferred_title(path: &Path) -> Option<String> {
+    if !is_mp4(path) {
+        return None;
+    }
+    let path = path.to_owned();
+    tokio::task::spawn_blocking(move || {
+        // FFprobe can overwrite ©nam with a stale freeform TITLE tag. Read the
+        // standard item directly, without parsing audio or loading cover images.
+        let config = mp4ameta::ReadConfig {
+            read_meta_items: true,
+            ..mp4ameta::ReadConfig::NONE
+        };
+        match mp4ameta::Tag::read_with_path(&path, &config) {
+            Ok(tags) => tags
+                .title()
+                .map(str::trim)
+                .filter(|title| !title.is_empty())
+                .map(str::to_owned),
+            Err(error) => {
+                tracing::debug!(file = %path.display(), %error, "Standard MP4 title unavailable; using FFprobe");
+                None
+            }
+        }
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
 pub fn parse_metadata(probe: &Value, path: &Path) -> Result<(Track, Option<u64>)> {
     let streams = probe["streams"].as_array().context("No streams found")?;
     let audio = streams
@@ -303,6 +340,7 @@ struct Existing {
     hash: String,
     cover_stamp: String,
     artwork_id: Option<String>,
+    metadata_version: i64,
 }
 
 pub async fn scan(state: &AppState) -> Result<usize> {
@@ -351,7 +389,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let rows = sqlx::query(
-        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp,metadata FROM tracks",
+        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp,metadata,metadata_version FROM tracks",
     )
     .fetch_all(&state.pool)
     .await?;
@@ -370,6 +408,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 hash: row.get("content_hash"),
                 cover_stamp: row.get("artwork_stamp"),
                 artwork_id,
+                metadata_version: row.get("metadata_version"),
             };
             (entry.path.clone(), entry)
         })
@@ -379,10 +418,12 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         let (size, modified) = fingerprint(&path).await?;
         let stamp = cover_stamp(&path).await;
         let key = path.to_string_lossy().into_owned();
-        if existing
-            .get(&key)
-            .is_some_and(|e| e.size == size && e.modified == modified && e.cover_stamp == stamp)
-        {
+        if existing.get(&key).is_some_and(|e| {
+            e.size == size
+                && e.modified == modified
+                && e.cover_stamp == stamp
+                && (!is_mp4(&path) || e.metadata_version >= METADATA_VERSION)
+        }) {
             continue;
         }
         candidates.push((path, size, modified, stamp));
@@ -398,6 +439,9 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 bail!("File is still being copied");
             }
             let (mut track, embedded) = parse_metadata(&probe(state, &path).await?, &path)?;
+            if let Some(title) = preferred_title(&path).await {
+                track.title = title;
+            }
             if !track.atmos && matches!(track.codec.as_str(), "eac3" | "truehd") {
                 track.atmos = inspect_atmos(state, &path).await;
                 if track.atmos {
@@ -448,12 +492,12 @@ pub async fn scan(state: &AppState) -> Result<usize> {
     let mut tx = state.pool.begin().await?;
     let mut changed = 0;
     for (track, path, size, modified, hash, stamp) in updates {
-        sqlx::query("INSERT INTO tracks(id,source_path,file_size,modified_ms,content_hash,metadata,artwork_stamp)
-            VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source_path=excluded.source_path,
+        sqlx::query("INSERT INTO tracks(id,source_path,file_size,modified_ms,content_hash,metadata,artwork_stamp,metadata_version)
+            VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source_path=excluded.source_path,
             file_size=excluded.file_size,modified_ms=excluded.modified_ms,content_hash=excluded.content_hash,
-            metadata=excluded.metadata,artwork_stamp=excluded.artwork_stamp")
+            metadata=excluded.metadata,artwork_stamp=excluded.artwork_stamp,metadata_version=excluded.metadata_version")
             .bind(&track.id).bind(path).bind(size).bind(modified).bind(hash)
-            .bind(serde_json::to_string(&track)?).bind(stamp).execute(&mut *tx).await?;
+            .bind(serde_json::to_string(&track)?).bind(stamp).bind(METADATA_VERSION).execute(&mut *tx).await?;
         changed += 1;
     }
     for entry in existing.values() {
