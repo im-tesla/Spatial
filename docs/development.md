@@ -23,6 +23,8 @@ For signed update builds and the GitHub release workflow, see [desktop updates](
 
 For the Linux desktop, package installation and ALSA playback checks, see the [Linux guide](linux.md).
 
+Desktop playback tracks its own mpv processes and cleans up orphaned players after a crash. See [playback process cleanup](playback.md) for ownership checks and platform behavior.
+
 ## Local server development
 
 Install FFmpeg/FFprobe on PATH; MediaInfo is recommended. Run the following from the repository root:

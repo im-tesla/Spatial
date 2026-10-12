@@ -10,6 +10,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
 use tokio::process::{Child, Command};
+mod ownership;
 #[cfg(windows)]
 type IpcStream = NamedPipeClient;
 #[cfg(target_os = "linux")]
@@ -69,6 +70,8 @@ pub struct PlaybackStatus {
 #[derive(Default)]
 pub struct Player {
     child: Option<Child>,
+    ownership: Option<ownership::Lease>,
+    registry_directory: Option<PathBuf>,
     #[cfg(any(windows, target_os = "linux"))]
     connection: Option<BufReader<IpcStream>>,
     #[cfg(target_os = "linux")]
@@ -166,6 +169,12 @@ pub async fn devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 impl Player {
+    pub fn initialize_registry(&mut self, directory: PathBuf) -> Result<(), String> {
+        ownership::initialize(&directory)?;
+        self.registry_directory = Some(directory);
+        Ok(())
+    }
+
     pub async fn stop(&mut self) {
         if let Some(mut child) = self.child.take() {
             let _ = child.kill().await;
@@ -179,6 +188,7 @@ impl Player {
         {
             self.ipc_directory = None;
         }
+        self.ownership = None;
         self.status.active = false;
         self.status.ended = false;
         self.status.passthrough = false;
@@ -196,6 +206,11 @@ impl Player {
             return Err("Select an HDMI audio output in Output settings".into());
         }
         self.stop().await;
+        let registry = self
+            .registry_directory
+            .clone()
+            .ok_or("Cannot initialize playback ownership")?;
+        cleanup_orphans(registry.clone()).await?;
         #[cfg(any(windows, target_os = "linux"))]
         let mut launch = command()?;
         self.status = PlaybackStatus {
@@ -207,13 +222,14 @@ impl Player {
         self.started = Some(Instant::now());
         #[cfg(any(windows, target_os = "linux"))]
         {
+            let owner_id = uuid::Uuid::new_v4();
             #[cfg(windows)]
-            let pipe = format!(r"\\.\pipe\spatial-{}", uuid::Uuid::new_v4());
+            let pipe = format!(r"\\.\pipe\spatial-{owner_id}");
             #[cfg(target_os = "linux")]
             let pipe = {
                 use std::os::unix::fs::PermissionsExt;
                 let directory = tempfile::Builder::new()
-                    .prefix("spatial-ipc-")
+                    .prefix(&format!("spatial-ipc-{owner_id}-"))
                     .tempdir()
                     .map_err(|_| "Cannot create the playback connection directory")?;
                 std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
@@ -226,6 +242,7 @@ impl Player {
                 self.ipc_directory = Some(directory);
                 pipe
             };
+            self.ownership = Some(ownership::Lease::create(&registry, owner_id, &pipe)?);
             launch
                 .args([
                     "--idle=yes",
@@ -258,6 +275,15 @@ impl Player {
                     .spawn()
                     .map_err(|e| format!("Cannot start playback engine: {e}"))?,
             );
+            if let Err(error) = self
+                .ownership
+                .as_ref()
+                .unwrap()
+                .record_child(self.child.as_ref().unwrap())
+            {
+                self.stop().await;
+                return Err(error);
+            }
             for _ in 0..100 {
                 match open_ipc(&pipe).await {
                     Ok(connection) => {
@@ -440,6 +466,10 @@ impl Player {
     }
 }
 
+pub async fn cleanup_orphans(directory: PathBuf) -> Result<(), String> {
+    ownership::cleanup(directory).await
+}
+
 #[cfg(all(test, any(windows, target_os = "linux")))]
 mod tests {
     use super::*;
@@ -490,6 +520,9 @@ mod tests {
             artwork_id: None,
         };
         let mut player = Player::default();
+        player
+            .initialize_registry(temporary.path().join("ownership"))
+            .unwrap();
         player
             .play(
                 path.to_str().unwrap(),

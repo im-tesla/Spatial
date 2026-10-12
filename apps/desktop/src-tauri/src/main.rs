@@ -277,6 +277,21 @@ fn main() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(NativeState::default())
+        .setup(|app| {
+            let directory = app.path().app_local_data_dir()?.join("playback");
+            app.state::<NativeState>()
+                .player
+                .try_lock()
+                .map_err(|_| std::io::Error::other("Playback is busy during initialization"))?
+                .initialize_registry(directory.clone())
+                .map_err(std::io::Error::other)?;
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = playback::cleanup_orphans(directory).await {
+                    eprintln!("Cannot clean up previous Spatial playback: {error}");
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             connect_server,
             restore_server,
