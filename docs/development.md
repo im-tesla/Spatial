@@ -46,7 +46,7 @@ npm run dev
 
 Open the local URL printed by Vite. The browser preview proxies the local development server and supports catalog browsing, favorites and artwork. Native HDMI playback is available in the desktop app.
 
-For a self-contained interface preview, open `/tests/app-preview.html?connection=saved&showcase` on the Vite server. This development-only page renders the production interface with mocked native IPC, original demo artwork and synthetic lyrics. It simulates playback without playing audio or requesting real media. Omit `showcase` for the smaller verification fixture. `connection=offline` and `connection=invalid` exercise saved-token recovery; `motion=reduced` simulates the reduced-motion preference.
+For a self-contained interface preview, open `/tests/app-preview.html?connection=saved&showcase` on the Vite server. This development-only page renders the production interface with mocked native IPC, original demo artwork and synthetic lyrics. It simulates playback without playing audio or requesting real media. Omit `showcase` for the smaller verification fixture. `connection=offline` and `connection=invalid` exercise saved-token recovery; `motion=reduced` simulates the reduced-motion preference. `lyrics=words` supplies uneven synthetic word timestamps. `/tests/lyrics-preview.html` offers exact position, pause and fullscreen controls to check word timing and the line-only fallback; add `?software=1` to verify solid word emphasis in the X11 renderer fallback.
 
 ## Tests
 

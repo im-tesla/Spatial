@@ -5,6 +5,7 @@ import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Library, PlaybackStatus, Track } from "../src/types";
 import appPackage from "../package.json";
 import "../src/styles.css";
+import { wordLyricsfile } from "./word-lyrics-fixture";
 
 Object.assign(window, { isTauri: true });
 mockWindows("main");
@@ -146,6 +147,7 @@ window.fetch = async (input, options) => {
   if (lyricsScenario === "missing") return new Response(null, { status: 404 });
   if (lyricsScenario === "offline") throw new TypeError("Synthetic offline lyrics fixture");
   return Response.json({ id: 987654322, duration: 20, instrumental: lyricsScenario === "instrumental",
+    lyricsfile: lyricsScenario === "words" ? wordLyricsfile : null,
     plainLyrics: lyricsScenario === "plain" ? "A quiet room\nThe lights turn green\nA little space to breathe\nEvery note comes home\nAnd the room opens up" : null,
     syncedLyrics: !lyricsScenario ? "[00:01.00] A quiet room\n[00:04.00] The lights turn green\n[00:08.00] A little space to breathe\n[00:12.00] Every note comes home\n[00:16.00] And the room opens up\n[00:19.00]" : null });
 };

@@ -1,4 +1,4 @@
-/* Spatial's line-timed interpretation of the Beautiful Lyrics visual treatment. */
+/* Highlight real word cues where available; keep line-only lyrics fully readable. */
 .lyrics-panel { --lyrics-highlight: var(--text); --lyrics-size-min: 25px; --lyrics-size-fluid: 8.4cqi; --lyrics-size-max: 39px; }
 .lyrics-panel.lyrics-fullscreen { --lyrics-size-min: 32px; --lyrics-size-fluid: 8.5cqi; --lyrics-size-max: 62px; }
 .lyrics-panel .lyrics-scroll { scrollbar-width: none; overflow-x: hidden; overscroll-behavior: contain; mask-image: linear-gradient(transparent, #000 12%, #000 85%, transparent); }
@@ -9,8 +9,8 @@
 .lyrics-panel .lyric-line:not(:disabled):hover, .lyrics-panel .lyric-line:focus-visible { background: transparent; color: var(--lyrics-highlight); filter: none !important; opacity: 1 !important; }
 .lyric-ink { display: block; white-space: pre-wrap; }
 .lyric-ink-active { position: relative; color: var(--lyrics-highlight); }
-.lyric-ink-base { display: block; opacity: .65; }
-.lyric-ink-fill { position: absolute; inset: 0; display: block; pointer-events: none; color: var(--lyrics-highlight); }
+.lyric-word { white-space: pre-wrap; }
+.lyrics-panel[data-following="false"] .lyric-word { opacity: 1 !important; text-shadow: none !important; }
 .lyrics-panel[data-following="false"] .lyric-ink-active, .lyrics-panel .lyric-line:hover .lyric-ink-active, .lyrics-panel .lyric-line:focus-visible .lyric-ink-active { background: none; color: var(--lyrics-highlight); -webkit-text-fill-color: currentColor; text-shadow: none !important; }
 .lyrics-panel .lyric-gap { display: inline-flex; gap: 10px; min-height: 32px; align-items: center; letter-spacing: 0; padding: 6px 0; }
 .lyrics-panel .lyric-gap i { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--lyrics-highlight); box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 22%, transparent); animation: lyric-interlude 2s ease-in-out infinite; }
@@ -37,8 +37,3 @@
 [data-reduced-motion="true"] .lyric-ink-active { background: none; color: var(--lyrics-highlight); -webkit-text-fill-color: currentColor; text-shadow: none !important; }
 
 .lyrics-sidebar-heading, .lyrics-sidebar > .lyrics-panel { position: relative; z-index: 1; }
-.lyrics-panel[data-following="false"] .lyric-ink-base, .lyrics-panel .lyric-line:hover .lyric-ink-base, .lyrics-panel .lyric-line:focus-visible .lyric-ink-base { opacity: 1; }
-.lyrics-panel[data-following="false"] .lyric-ink-fill, .lyrics-panel .lyric-line:hover .lyric-ink-fill, .lyrics-panel .lyric-line:focus-visible .lyric-ink-fill { display: none; }
-@media (prefers-reduced-motion: reduce) { .lyric-ink-base { opacity: 1; }.lyric-ink-fill { display: none; } }
-[data-reduced-motion="true"] .lyric-ink-base { opacity: 1; }
-[data-reduced-motion="true"] .lyric-ink-fill { display: none; }

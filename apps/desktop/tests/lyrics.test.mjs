@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseLrc, activeLyric, lyricsTitle, lyricLineProgress } from "../src/lyrics.ts";
+import { parseLrc, activeLyric, lyricsTitle, lyricWordState, timedLyrics, highlightedLyrics } from "../src/lyrics.ts";
+import { stringify } from "yaml";
 
 test("LRC handles repeated timestamps, fractions, CRLF and timed silence", () => {
   const lines = parseLrc("[ar:Spatial]\r\n[00:10.125][00:20.5] Second line\r\n[00:02.01] First line\r\n[00:25.00]\r\n[00:99.00] Invalid timestamp");
@@ -21,16 +22,65 @@ test("highlighting respects timestamp boundaries, backward seeks and silence", (
   assert.equal(activeLyric([], 100), -1);
 });
 
-test("line illumination follows real cue boundaries and snaps correctly after seeks", () => {
-  assert.equal(lyricLineProgress(1, 2, 6), 0);
-  assert.equal(lyricLineProgress(2, 2, 6), 0);
-  assert.equal(lyricLineProgress(4, 2, 6), .5);
-  assert.equal(lyricLineProgress(6, 2, 6), 1);
-  assert.equal(lyricLineProgress(10, 2, 6), 1);
-  assert.equal(lyricLineProgress(3, 2, 6), .25);
-  assert.equal(lyricLineProgress(2, 2, 2), 1);
-  assert.equal(lyricLineProgress(NaN, 2, 6), 0);
-  assert.equal(lyricLineProgress(3, 2, Infinity), 0);
+const document = { version: "1.0", metadata: {}, lines: [
+  { text: "A quiet room", start_ms: 1000, end_ms: 4000, words: [
+    { text: "A ", start_ms: 1000, end_ms: 1300 }, { text: "quiet ", start_ms: 1700, end_ms: 2300 },
+    { text: "room", start_ms: 3000, end_ms: 3800 },
+  ] }, { text: "The lights turn green", start_ms: 5000, end_ms: 7000 },
+] };
+const timed = data => ({ id: 1, instrumental: false, plainLyrics: null, syncedLyrics: "[00:01.00] A quiet room", lyricsfile: stringify(data) });
+
+test("real word timestamps preserve spacing, pauses and explicit line ends", () => {
+  const lines = timedLyrics(timed(document), 8);
+  assert.deepEqual(lines[0].words, [
+    { text: "A ", start: 1, end: 1.3 }, { text: "quiet ", start: 1.7, end: 2.3 }, { text: "room", start: 3, end: 3.8 },
+  ]);
+  assert.equal(lines[0].words.map(word => word.text).join(""), lines[0].text);
+  assert.deepEqual(lines.map(line => [line.time, line.text]), [[1, "A quiet room"], [4, ""], [5, "The lights turn green"], [7, ""]]);
+  const word = lines[0].words[1];
+  assert.equal(lyricWordState(word, 1.699), "upcoming");
+  assert.equal(lyricWordState(word, 1.7), "active");
+  assert.equal(lyricWordState(word, 2.299), "active");
+  assert.equal(lyricWordState(word, 2.3), "sung");
+  assert.equal(lyricWordState(word, 1.8), "active");
+  assert.equal(lyricWordState(word, .5), "upcoming");
+  assert.equal(lyricWordState(word, NaN), "upcoming");
+});
+
+test("missing word end times use the next supplied cue, never evenly spaced guesses", () => {
+  const data = structuredClone(document);
+  for (const word of data.lines[0].words) delete word.end_ms;
+  const lines = timedLyrics(timed(data), 8);
+  assert.deepEqual(lines[0].words.map(word => [word.start, word.end]), [[1, 1.7], [1.7, 3], [3, 4]]);
+});
+
+test("invalid words keep line timing, and malformed or unsupported documents fall back to LRC", () => {
+  for (const mutate of [data => data.lines[0].words[1].start_ms = 900,
+    data => data.lines[0].words[1].end_ms = 1500, data => data.lines[0].words[1].text = "different ",
+    data => data.lines[0].words[2].end_ms = 9000]) {
+    const data = structuredClone(document); mutate(data);
+    const lines = timedLyrics(timed(data), 8);
+    assert.equal(lines[0].text, "A quiet room"); assert.equal(lines[0].words, undefined);
+  }
+  for (const lyricsfile of ["version: [", "version: '2.0'\nlines: []", "a: &a [*a]\nlines: *a", "x".repeat(256001)])
+    assert.deepEqual(timedLyrics({ ...timed(document), lyricsfile }, 8), [{ time: 1, text: "A quiet room" }]);
+  const lines = timedLyrics({ ...timed(document), lyricsfile: undefined }, 8);
+  assert.deepEqual(lines, [{ time: 1, text: "A quiet room" }]);
+});
+
+test("overlapping timed vocals keep both lines eligible for word highlighting", () => {
+  const data = structuredClone(document);
+  data.lines[1] = { text: "Another voice", start_ms: 2000, end_ms: 5000, words: [
+    { text: "Another ", start_ms: 2000, end_ms: 3500 }, { text: "voice", start_ms: 3500, end_ms: 5000 },
+  ] };
+  const lines = timedLyrics(timed(data), 6);
+  assert.deepEqual([...highlightedLyrics(lines, 2.1)], [1, 0]);
+  assert.deepEqual([...highlightedLyrics(lines, 4.1)], [1]);
+  assert.deepEqual([...highlightedLyrics(lines, .5)], []);
+  delete data.lines[0].end_ms;
+  const withoutLineEnd = timedLyrics(timed(data), 6);
+  assert.equal(withoutLineEnd[0].words[2].end, 3.8);
+  assert.deepEqual([...highlightedLyrics(withoutLineEnd, 3.2)], [1, 0]);
 });
 
 function storage() {
@@ -61,10 +111,13 @@ test("lyrics searches remove the mix credit while preserving recording editions"
 test("lookup encodes metadata, deduplicates requests and reuses the local cache after restart", async () => {
   globalThis.localStorage = storage();
   const requests = [];
-  globalThis.fetch = async (url, options) => { requests.push({ url, options }); return Response.json(result); };
+  const wordResult = { ...result, lyricsfile: stringify(document), hasWordSync: true };
+  globalThis.fetch = async (url, options) => { requests.push({ url, options }); return Response.json(wordResult); };
   const { getLyrics } = await import("../src/lyrics.ts?cache-test");
   const [first, second] = await Promise.all([getLyrics(track), getLyrics(track)]);
   assert.deepEqual(first, second);
+  assert.equal(first.lyricsfile, wordResult.lyricsfile);
+  assert.equal(timedLyrics(first, track.duration)[0].words[1].start, 1.7);
   assert.equal(requests.length, 1);
   const url = new URL(requests[0].url);
   assert.equal(url.searchParams.get("track_name"), track.title);
@@ -95,6 +148,26 @@ test("requests run one at a time and respect provider Retry-After across tracks"
   const restarted = await import("../src/lyrics.ts?backoff-restart");
   await assert.rejects(restarted.getLyrics({ ...track, title: "Third recording" }), /Try again in/);
   assert.equal(requests, 1);
+});
+
+test("older line-only caches refresh word data while remaining readable offline", async () => {
+  globalThis.localStorage = storage();
+  const key = JSON.stringify([track.title, track.artist, track.album, Math.round(track.duration)]);
+  const old = { id: result.id, instrumental: false, plainLyrics: result.plainLyrics, syncedLyrics: result.syncedLyrics };
+  localStorage.setItem("spatial-lyrics:v1", JSON.stringify([{ key, expires: Date.now() + 100000, value: old }]));
+  let requests = 0;
+  globalThis.fetch = async () => { requests++; throw new TypeError("offline fixture"); };
+  const offline = await import("../src/lyrics.ts?legacy-offline");
+  assert.deepEqual(await offline.getLyrics(track), old);
+  assert.equal(requests, 1);
+  globalThis.fetch = async () => { requests++; return Response.json({ ...result, lyricsfile: stringify(document) }); };
+  const online = await import("../src/lyrics.ts?legacy-online");
+  const refreshed = await online.getLyrics(track);
+  assert.equal(requests, 2);
+  assert.equal(timedLyrics(refreshed, track.duration)[0].words[1].start, 1.7);
+  const restarted = await import("../src/lyrics.ts?legacy-restarted");
+  assert.deepEqual(await restarted.getLyrics(track), refreshed);
+  assert.equal(requests, 2);
 });
 
 test("missing lyrics are cached while a wrong recording duration is rejected", async () => {

@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { ease, spring } from "./motion";
 import { ArrowDown, LoaderCircle, Mic2, Music2, RefreshCw } from "lucide-react";
-import { activeLyric, getLyrics, parseLrc } from "./lyrics";
+import { activeLyric, getLyrics, highlightedLyrics, timedLyrics } from "./lyrics";
 import type { Lyrics } from "./lyrics";
 import type { Track } from "./types";
 import LyricText from "./LyricText";
@@ -42,8 +42,9 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
     return () => { cancelled = true; };
   }, [signature, attempt]);
 
-  const lines = useMemo(() => parseLrc(lyrics?.syncedLyrics || ""), [lyrics]);
+  const lines = useMemo(() => timedLyrics(lyrics, track?.duration || 0), [lyrics, track?.duration]);
   const active = activeLyric(lines, position);
+  const highlighted = highlightedLyrics(lines, position);
   useEffect(() => {
     if (!following || !playing || active < 0) return;
     const row = lineRefs.current[active]; const container = scrollRef.current;
@@ -63,7 +64,6 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
   const synced = lines.length > 0;
   const fullscreen = variant === "fullscreen";
   const focused = playing && following;
-  const lineEnd = active >= 0 ? lines.find((line, index) => index > active && line.time > lines[active].time)?.time ?? track?.duration ?? lines[active].time : 0;
   return <div className={`lyrics-panel ${fullscreen ? "lyrics-fullscreen" : ""}`} data-following={following} data-running={playing && !paused}
     style={{ "--lyrics-pane-height": `${paneHeight}px` } as CSSProperties}>
     {!fullscreen && <div className="lyrics-track-info"><strong>{track?.title || "Choose a track"}</strong><span>{track ? `${track.artist} · ${track.album}` : "Lyrics will follow your music."}</span></div>}
@@ -74,16 +74,16 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
       {loading ? <div className="lyrics-empty" role="status"><LoaderCircle className="spin" size={28} /><h3>Finding the words…</h3></div>
         : error ? <div className="lyrics-empty" role="status"><Mic2 size={28} /><h3>Lyrics couldn't load</h3><p>{error}</p><button className="secondary" onClick={() => setAttempt(value => value + 1)}><RefreshCw size={14} /> Try again</button></div>
         : synced ? <motion.div className="lyrics-lines" key={signature} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .4, ease }}>{lines.map((line, index) => <motion.button key={`${index}-${line.time}`} ref={element => { lineRefs.current[index] = element; }}
-          animate={{ x: !reduced && focused && index === active ? (fullscreen ? 4 : 2) : 0,
-            y: !reduced && focused ? index === active ? -2 : Math.max(-3, Math.min(3, index - active)) * 1.5 : 0,
-            scale: !reduced && focused && index === active ? 1.04 : 1,
-            opacity: !focused ? 1 : index === active ? 1 : Math.abs(index - active) === 1 ? (index < active ? .44 : .56) : .34,
-            filter: softwareRendering ? "none" : reduced || !focused || index === active ? "blur(0px)" : `blur(${Math.min(2.4, Math.abs(index - active) * (fullscreen ? .7 : .5))}px)` }}
+          animate={{ x: !reduced && focused && highlighted.has(index) ? (fullscreen ? 4 : 2) : 0,
+            y: !reduced && focused ? highlighted.has(index) ? -2 : Math.max(-3, Math.min(3, index - active)) * 1.5 : 0,
+            scale: !reduced && focused && highlighted.has(index) ? 1.04 : 1,
+            opacity: !focused ? 1 : highlighted.has(index) ? 1 : Math.abs(index - active) === 1 ? (index < active ? .44 : .56) : .34,
+            filter: softwareRendering ? "none" : reduced || !focused || highlighted.has(index) ? "blur(0px)" : `blur(${Math.min(2.4, Math.abs(index - active) * (fullscreen ? .7 : .5))}px)` }}
           transition={reduced ? { duration: 0 } : { ...spring, stiffness: 210, damping: 28, opacity: { duration: .55 }, filter: { duration: .65 } }} style={{ transformOrigin: "left center" }}
-          className={`lyric-line ${playing && index === active ? "current" : ""} ${playing && index < active ? "past" : ""}`}
-          aria-current={playing && index === active ? "true" : undefined} aria-label={`${line.text || "Instrumental passage"} · Seek to ${Math.floor(line.time / 60)}:${Math.floor(line.time % 60).toString().padStart(2, "0")}`}
+          className={`lyric-line ${playing && highlighted.has(index) ? "current" : ""} ${playing && index < active && !highlighted.has(index) ? "past" : ""}`}
+          aria-current={playing && highlighted.has(index) ? "true" : undefined} aria-label={`${line.text || "Instrumental passage"} · Seek to ${Math.floor(line.time / 60)}:${Math.floor(line.time % 60).toString().padStart(2, "0")}`}
           dir="auto" disabled={!playing} onClick={() => { setFollowing(true); onSeek(line.time); }}>
-          {line.text ? playing && index === active ? <LyricText text={line.text} position={position} start={line.time} end={lineEnd}
+          {line.text ? playing && highlighted.has(index) ? <LyricText text={line.text} words={line.words} position={position}
             running={!paused && following} reduced={!!reduced} /> : <span className="lyric-ink">{line.text}</span>
             : <span className="lyric-gap" aria-label="Instrumental passage"><i /><i /><i /></span>}
         </motion.button>)}</motion.div>

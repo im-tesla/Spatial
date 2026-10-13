@@ -1,32 +1,39 @@
-import { useEffect } from "react";
-import { motion, useMotionValue, useTransform } from "motion/react";
-import { lyricLineProgress } from "./lyrics";
+import { useEffect, useState } from "react";
+import { motion } from "motion/react";
+import { lyricWordState } from "./lyrics";
+import type { LyricWord } from "./lyrics";
 import { softwareRendering } from "./rendering";
 
-// A line's start and next cue drive this visual fill. No word timings are inferred.
-export default function LyricText({ text, position, start, end, running, reduced }: {
-  text: string; position: number; start: number; end: number; running: boolean; reduced: boolean;
+export default function LyricText({ text, words, position, running, reduced }: {
+  text: string; words?: LyricWord[]; position: number; running: boolean; reduced: boolean;
 }) {
-  const progress = useMotionValue(lyricLineProgress(position, start, end));
-  const fill = useTransform(progress, value => `inset(0 0 ${Math.max(0, 100 - value * 120)}% 0)`);
-  const glow = useTransform(progress, value => reduced || softwareRendering ? "none"
-    : `0 0 16px rgb(255 255 255 / ${.08 + Math.sin(value * Math.PI) * .2}), 0 0 38px color-mix(in srgb, var(--accent) 15%, transparent)`);
+  const [clock, setClock] = useState({ sample: position, value: position });
   useEffect(() => {
-    progress.set(lyricLineProgress(position, start, end));
-    if (!running || reduced || softwareRendering) return;
-    let frame = 0;
+    if (!words?.length) return;
+    setClock({ sample: position, value: position });
+    if (!running) return;
     const sampled = performance.now();
-    const paint = (now: number) => {
-      // Interpolate between native samples, then hold if fresh playback data stops.
-      const elapsed = Math.min(.8, Math.max(0, (now - sampled) / 1000));
-      progress.set(lyricLineProgress(position + elapsed, start, end));
-      if (elapsed < .8) frame = requestAnimationFrame(paint);
+    let timer: ReturnType<typeof setTimeout>;
+    const advance = () => {
+      // Follow native playback samples; never advance indefinitely on stale data.
+      const elapsed = Math.min(.8, Math.max(0, (performance.now() - sampled) / 1000));
+      const now = position + elapsed;
+      setClock({ sample: position, value: now });
+      const next = words.flatMap(word => [word.start, word.end]).filter(time => time > now && time <= position + .8);
+      if (next.length) timer = setTimeout(advance, Math.max(1, (Math.min(...next) - now) * 1000));
     };
-    frame = requestAnimationFrame(paint);
-    return () => cancelAnimationFrame(frame);
-  }, [position, start, end, running, reduced, progress]);
-  return <motion.span className="lyric-ink lyric-ink-active" style={{ textShadow: glow }}>
-    <span className="lyric-ink-base">{text}</span>
-    <motion.span className="lyric-ink-fill" aria-hidden="true" style={{ clipPath: fill }}>{text}</motion.span>
-  </motion.span>;
+    advance();
+    return () => clearTimeout(timer);
+  }, [position, words, running]);
+
+  if (!words?.length) return <span className="lyric-ink lyric-ink-active">{text}</span>;
+  const now = running && clock.sample === position ? clock.value : position;
+  return <span className="lyric-ink lyric-ink-active lyric-word-timed">{words.map((word, index) => {
+    const state = lyricWordState(word, now);
+    return <motion.span key={index} className="lyric-word" data-word-state={state}
+      animate={{ opacity: state === "upcoming" ? .38 : state === "active" ? 1 : .86,
+        textShadow: state === "active" && !reduced && !softwareRendering
+          ? "0 0 14px rgb(255 255 255 / .3), 0 0 30px color-mix(in srgb, var(--accent) 24%, transparent)" : "none" }}
+      transition={{ duration: reduced || softwareRendering ? 0 : .12 }}>{word.text}</motion.span>;
+  })}</span>;
 }
