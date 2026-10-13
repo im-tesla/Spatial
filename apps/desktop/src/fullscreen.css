@@ -1,6 +1,6 @@
 .listening-view { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; overflow: hidden; isolation: isolate; background: var(--base); color: var(--text); outline: none; }
-.listening-atmosphere { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.listening-backdrop-art.cover { position: absolute; inset: -15%; width: 130%; height: 130%; aspect-ratio: auto; border-radius: 0; filter: blur(100px) saturate(1.3); opacity: .38; }
+.listening-atmosphere { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.listening-backdrop-art.cover { position: absolute; inset: -15%; width: 130%; height: 130%; aspect-ratio: auto; border-radius: 0; filter: none; opacity: .38; }
 .listening-backdrop-art > svg { display: none; }
 .listening-glow { position: absolute; width: 90vw; height: 90vw; border-radius: 50%; will-change: transform; animation: listening-drift 26s ease-in-out infinite alternate; }
 .listening-glow-one { left: -38%; top: -55%; background: radial-gradient(circle, color-mix(in srgb, var(--accent) 19%, transparent), transparent 66%); }
@@ -47,4 +47,6 @@
 @media (max-height: 580px) and (min-width: 761px) { .listening-header { padding-top: 6px; }.listening-artwork { width: min(100%, 37vh); }.listening-caption { margin: 13px 0 8px; }.listening-metadata h1 { font-size: 22px; -webkit-line-clamp: 1; }.listening-artist { font-size: 15px; }.listening-album { display: none; }.listening-transport .play-button { width: 44px; height: 44px; }.listening-transport .transport-buttons { margin-bottom: 4px; } }
 @media (max-width: 1000px) { .listening-layout { padding-left: 40px; padding-right: 40px; column-gap: 50px; }.listening-transport .transport-buttons { gap: 10px; }.listening-metadata h1 { font-size: 25px; } }
 @media (max-width: 760px) { .listening-view { overflow-y: auto; }.listening-header { padding: 16px 22px 0; }.listening-layout { flex: none; min-height: calc(100dvh - 70px); grid-template-columns: 1fr; gap: 36px; padding: 26px 28px 28px; }.listening-record { width: min(100%, 440px); margin: 0 auto; }.listening-artwork { width: min(100%, 38vh); align-self: center; }.listening-caption { margin-top: 24px; }.listening-lyrics { height: 65vh; min-height: 340px; }}
-@media (prefers-reduced-motion: reduce) { .listening-glow { animation: none; }.listening-backdrop-art { filter: blur(100px); } }
+@media (prefers-reduced-motion: reduce) { .listening-glow { animation: none; }.listening-backdrop-art { filter: none; } }
+
+.listening-header, .listening-layout { position: relative; z-index: 1; }

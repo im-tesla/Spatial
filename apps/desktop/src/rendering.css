@@ -1,0 +1,11 @@
+/* Keep cue scrolling, controls and album crossfades in the X11 software path.
+   Avoid continuously repainting blurred full-screen surfaces and masked text. */
+html[data-webkit-software="true"] .listening-glow,
+html[data-webkit-software="true"] .lyrics-sidebar-atmosphere > .cover { animation: none; will-change: auto; }
+html[data-webkit-software="true"] .modal-backdrop,
+html[data-webkit-software="true"] .follow-lyrics { backdrop-filter: none; -webkit-backdrop-filter: none; }
+html[data-webkit-software="true"] .modal-backdrop { background: #000d; }
+html[data-webkit-software="true"] .lyric-ink-fill { display: none; }
+html[data-webkit-software="true"] .lyric-ink-base { opacity: 1; }
+html[data-webkit-software="true"] .lyric-ink-active { text-shadow: none !important; }
+html[data-webkit-software="true"] .lyrics-panel .lyrics-scroll { mask-image: none; -webkit-mask-image: none; }

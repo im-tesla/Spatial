@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { X } from "lucide-react";
 import LyricsPanel from "./LyricsPanel";
-import Cover from "./Cover";
+import BackdropCover from "./BackdropCover";
 import { clampLyricsWidth, defaultLyricsWidth, minLyricsWidth } from "./lyricsLayout";
 import type { Track } from "./types";
 
@@ -13,7 +13,7 @@ export default function LyricsSidebar({ width, maximum, onResize, onClose, track
   const [resizing, setResizing] = useState(false);
   return <aside id="lyrics-sidebar" className={`lyrics-sidebar ${resizing ? "resizing" : ""}`} aria-labelledby="lyrics-title" data-playing={playing && !paused}
     onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-    <div className="lyrics-sidebar-atmosphere" aria-hidden="true"><Cover id={track?.artwork_id || null} title="" /></div>
+    <div className="lyrics-sidebar-atmosphere" aria-hidden="true"><BackdropCover id={track?.artwork_id || null} /></div>
     <div className="lyrics-resize" role="separator" tabIndex={0} aria-label="Resize lyrics panel" aria-orientation="vertical"
       aria-controls="lyrics-sidebar" aria-valuemin={minLyricsWidth} aria-valuemax={maximum} aria-valuenow={width} aria-valuetext={`${width} pixels`}
       onPointerDown={event => {

@@ -2,10 +2,12 @@ import { useEffect, useRef } from "react";
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { Minimize2 } from "lucide-react";
 import Cover from "./Cover";
+import BackdropCover from "./BackdropCover";
 import LyricsPanel from "./LyricsPanel";
 import { FavoriteButton, PlaybackControls, PlaybackProgress } from "./PlayerControls";
 import type { PlaybackControlsProps, PlaybackProgressProps } from "./PlayerControls";
 import { ease } from "./motion";
+import { softwareRendering } from "./rendering";
 import type { Track } from "./types";
 import "./fullscreen.css";
 
@@ -46,10 +48,10 @@ export default function FullscreenPlayer({ track, active, position, controls, pr
 
   return <motion.section ref={root} className="listening-view" data-playing={controls.playing ? "true" : "false"}
     tabIndex={-1} role="dialog" aria-modal="true" aria-label="Fullscreen player" inert={!present}
-    initial={{ opacity: 0, scale: reduced ? 1 : 1.025 }} animate={{ opacity: 1, scale: 1 }}
-    exit={{ opacity: 0, scale: reduced ? 1 : .985 }} transition={{ duration: reduced ? 0 : .55, ease }}>
+    initial={{ opacity: 0, scale: reduced || softwareRendering ? 1 : 1.025 }} animate={{ opacity: 1, scale: 1 }}
+    exit={{ opacity: 0, scale: reduced || softwareRendering ? 1 : .985 }} transition={{ duration: reduced ? 0 : .55, ease }}>
     <div className="listening-atmosphere" aria-hidden="true">
-      <Cover id={track.artwork_id} title="" className="listening-backdrop-art" />
+      <BackdropCover id={track.artwork_id} className="listening-backdrop-art" />
       <div className="listening-glow listening-glow-one" /><div className="listening-glow listening-glow-two" />
       <div className="listening-shade" />
     </div>

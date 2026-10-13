@@ -5,7 +5,7 @@ test "${#task_appimages[@]}" -eq 1
 test -f "${task_appimages[0]}"
 task_log=$(mktemp)
 trap 'rm -f -- "$task_log"' EXIT
-# Headless CI has no GPU/display. These renderer overrides do not ship with the app.
+# Headless CI has no GPU/display. Use the app's X11 renderer fallback explicitly.
 set +e
 WEBKIT_DISABLE_DMABUF_RENDERER=1 GDK_BACKEND=x11 dbus-run-session -- \
   xvfb-run -a timeout --signal=TERM 15s "${task_appimages[0]}" --appimage-extract-and-run >"$task_log" 2>&1

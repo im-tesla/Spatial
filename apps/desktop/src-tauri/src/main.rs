@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod credentials;
 mod discord;
+#[cfg(any(target_os = "linux", test))]
+mod linux_rendering;
 mod playback;
 mod remote;
 mod server;
@@ -273,7 +275,16 @@ fn complete_remote_command(id: String, error: Option<String>, state: State<'_, N
 }
 
 fn main() {
+    #[cfg(target_os = "linux")]
+    let software_rendering = linux_rendering::configure_before_threads();
+    #[cfg(not(target_os = "linux"))]
+    let software_rendering = false;
     let app = tauri::Builder::default()
+        .append_invoke_initialization_script(if software_rendering {
+            "window.__SPATIAL_SOFTWARE_RENDERING__ = true;"
+        } else {
+            ""
+        })
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(NativeState::default())

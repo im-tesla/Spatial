@@ -7,6 +7,7 @@ import { activeLyric, getLyrics, parseLrc } from "./lyrics";
 import type { Lyrics } from "./lyrics";
 import type { Track } from "./types";
 import LyricText from "./LyricText";
+import { softwareRendering } from "./rendering";
 import "./lyrics.css";
 
 export default function LyricsPanel({ track, position, playing, onSeek, variant = "sidebar", paused = false }: {
@@ -77,7 +78,7 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
             y: !reduced && focused ? index === active ? -2 : Math.max(-3, Math.min(3, index - active)) * 1.5 : 0,
             scale: !reduced && focused && index === active ? 1.04 : 1,
             opacity: !focused ? 1 : index === active ? 1 : Math.abs(index - active) === 1 ? (index < active ? .44 : .56) : .34,
-            filter: reduced || !focused || index === active ? "blur(0px)" : `blur(${Math.min(2.4, Math.abs(index - active) * (fullscreen ? .7 : .5))}px)` }}
+            filter: softwareRendering ? "none" : reduced || !focused || index === active ? "blur(0px)" : `blur(${Math.min(2.4, Math.abs(index - active) * (fullscreen ? .7 : .5))}px)` }}
           transition={reduced ? { duration: 0 } : { ...spring, stiffness: 210, damping: 28, opacity: { duration: .55 }, filter: { duration: .65 } }} style={{ transformOrigin: "left center" }}
           className={`lyric-line ${playing && index === active ? "current" : ""} ${playing && index < active ? "past" : ""}`}
           aria-current={playing && index === active ? "true" : undefined} aria-label={`${line.text || "Instrumental passage"} · Seek to ${Math.floor(line.time / 60)}:${Math.floor(line.time % 60).toString().padStart(2, "0")}`}

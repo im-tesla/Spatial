@@ -15,6 +15,12 @@ An unlocked desktop **Secret Service** provider, such as GNOME Keyring, is requi
 
 Packages are built on an Ubuntu 22.04 baseline with WebKitGTK 4.1. Other distributions must provide compatible system libraries; building on this baseline does not constitute a tested distribution matrix. ARM builds are not included yet.
 
+## Rendering on X11
+
+Spatial selects WebKitGTK's compatible renderer on X11, including Openbox, before creating the window. This avoids DMA-buffer rendering artifacts seen on some graphics setups. Album backgrounds are softened once and cached; this mode keeps palette changes, playback controls and scrolling lyrics while disabling live blur, text masks and continuous background drift to reduce redraw cost. Wayland retains the normal effects.
+
+No launch flag is needed. An explicit `WEBKIT_DISABLE_DMABUF_RENDERER` value is respected: setting it to `0` opts back into WebKit's default renderer and effects for testing. Avoid `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1` on affected setups; shared-memory transport can still show rectangular artifacts. This fallback is separate from mpv and does not change HDMI bitstream output.
+
 ## HDMI playback
 
 1. Connect the Linux PC to the receiver by HDMI and switch the receiver on.
