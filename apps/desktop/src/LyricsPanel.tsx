@@ -62,12 +62,13 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
 
   const plain = lyrics?.plainLyrics?.trim();
   const synced = lines.length > 0;
+  const timingLabel = lines.some(line => line.words?.length) ? "Word-synced lyrics" : "Line-synced lyrics";
   const fullscreen = variant === "fullscreen";
   const focused = playing && following;
   return <div className={`lyrics-panel ${fullscreen ? "lyrics-fullscreen" : ""}`} data-following={following} data-running={playing && !paused}
     style={{ "--lyrics-pane-height": `${paneHeight}px` } as CSSProperties}>
     {!fullscreen && <div className="lyrics-track-info"><strong>{track?.title || "Choose a track"}</strong><span>{track ? `${track.artist} · ${track.album}` : "Lyrics will follow your music."}</span></div>}
-    <div className="lyrics-mode"><Mic2 size={14} /><span>{loading ? "Finding lyrics…" : synced ? (playing ? "Synced lyrics" : "Timed lyrics · play this track to follow along") : plain ? "Plain lyrics · timing unavailable" : "Lyrics"}</span>
+    <div className="lyrics-mode"><Mic2 size={14} /><span>{loading ? "Finding lyrics…" : synced ? (playing ? timingLabel : `${timingLabel} · play this track to follow along`) : plain ? "Plain lyrics · timing unavailable" : "Lyrics"}</span>
       {synced && playing && !following && <button className="follow-lyrics" onClick={() => setFollowing(true)}><ArrowDown size={13} /> Follow song</button>}
     </div>
     <div className="lyrics-scroll" ref={scrollRef} onWheel={() => setFollowing(false)} onTouchMove={() => setFollowing(false)} onPointerDown={event => { if (event.target === event.currentTarget) setFollowing(false); }} onKeyDown={event => { if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End"].includes(event.key)) setFollowing(false); }}>
