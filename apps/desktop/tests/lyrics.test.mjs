@@ -91,21 +91,23 @@ const track = { title: "Test & title", artist: "Spatial Test Artist", album: "Te
 const result = { id: 1, trackName: track.title, artistName: track.artist, albumName: track.album, duration: 42, instrumental: false, plainLyrics: "An original test line", syncedLyrics: "[00:02.00] An original test line" };
 
 test("lyrics searches remove the mix credit while preserving recording editions", async () => {
-  for (const title of ["Song (Mixed By Tesla)", "Song [mixed by tesla]", "Song — mixed by tesla", "mixed by tesla - Song", "Song mixed BY TESLA"])
+  for (const title of ["Song (Spatial Mix)", "Song [SPATIAL MIX]", "Song — spatial mix", "Spatial Mix - Song", "Song (Mixed By Tesla)", "Song [mixed by tesla]", "Song — mixed by tesla", "mixed by tesla - Song", "Song mixed BY TESLA"])
     assert.equal(lyricsTitle(title), "Song");
   assert.equal(lyricsTitle("Song (Live) (Mixed By Tesla)"), "Song (Live)");
+  assert.equal(lyricsTitle("Song (Live) (Spatial Mix)"), "Song (Live)");
+  assert.equal(lyricsTitle("Spatial Mixture"), "Spatial Mixture");
   assert.equal(lyricsTitle("Mixed by someone else"), "Mixed by someone else");
   assert.equal(lyricsTitle("Song -"), "Song -");
   globalThis.localStorage = storage();
   const urls = [];
   globalThis.fetch = async url => { urls.push(new URL(url)); return Response.json(result); };
   const { getLyrics } = await import("../src/lyrics.ts?mix-title-test");
-  const decorated = { ...track, title: `${track.title} (Mixed By Tesla)` };
+  const decorated = { ...track, title: `${track.title} (Spatial Mix)` };
   await getLyrics(decorated);
   await getLyrics(track);
   assert.equal(urls.length, 1);
   assert.equal(urls[0].searchParams.get("track_name"), track.title);
-  assert.equal(decorated.title, `${track.title} (Mixed By Tesla)`);
+  assert.equal(decorated.title, `${track.title} (Spatial Mix)`);
 });
 
 test("lookup encodes metadata, deduplicates requests and reuses the local cache after restart", async () => {

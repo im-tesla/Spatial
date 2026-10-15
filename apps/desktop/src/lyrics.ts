@@ -129,9 +129,10 @@ function backoff(header: string | null, fallback: number) {
 }
 
 export function lyricsTitle(title: string): string {
-  if (!/\bmixed\s+by\s+tesla\b/i.test(title)) return title.trim();
-  return title.replace(/(?:\(\s*mixed\s+by\s+tesla\s*\)|\[\s*mixed\s+by\s+tesla\s*\])/gi, "")
-    .replace(/\bmixed\s+by\s+tesla\b/gi, "")
+  const credit = "(?:spatial\\s+mix|mixed\\s+by\\s+tesla)";
+  if (!new RegExp(`\\b${credit}\\b`, "i").test(title)) return title.trim();
+  return title.replace(new RegExp(`\\(\\s*${credit}\\s*\\)|\\[\\s*${credit}\\s*\\]`, "gi"), "")
+    .replace(new RegExp(`\\b${credit}\\b`, "gi"), "")
     .replace(/\s+/g, " ").replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, "").trim();
 }
 

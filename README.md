@@ -14,7 +14,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 - **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the desktop's HDMI output, with source files served without transcoding.
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
-- **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “mixed by tesla” in their titles, regardless of capitalization.
+- **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “Spatial Mix” in their titles, regardless of capitalization. The previous “mixed by tesla” credit is still recognized.
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** [Synced lyrics](docs/lyrics.md) use glowing line highlights, soft focus and cover-colored backgrounds in the resizable side panel and fullscreen player. Click a line to seek, or keep browsing while the song continues.
 - **Fill the screen with the music.** Open the [fullscreen player](docs/fullscreen.md) for large album artwork, playback controls, and animated lyrics against a moving album-colored background.

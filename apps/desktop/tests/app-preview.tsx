@@ -45,9 +45,9 @@ if (showcase) {
 }
 // Opt-in collection fixture includes title matches and an artist-only non-match.
 if (new URLSearchParams(location.search).has("mixes")) tracks.push(
-  { ...tracks[0], id: "fixture-mix-one", title: "A quiet room (Mixed by Tesla)" },
+  { ...tracks[0], id: "fixture-mix-one", title: "A quiet room (Spatial Mix)" },
   { ...tracks[1], id: "fixture-mix-two", title: "A little space — MIXED BY TESLA", artwork_id: "fixture-blue" },
-  { ...tracks[2], id: "fixture-not-a-mix", title: "Every note comes home", artist: "Mixed by Tesla" },
+  { ...tracks[2], id: "fixture-not-a-mix", title: "Every note comes home", artist: "Spatial Mix" },
 );
 if (friendLibrary) {
   for (const album of albums) album.id = `friend-${album.id}`;
