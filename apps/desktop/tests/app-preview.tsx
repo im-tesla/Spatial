@@ -6,6 +6,9 @@ import type { Library, PlaybackStatus, Track } from "../src/types";
 import appPackage from "../package.json";
 import "../src/styles.css";
 import { wordLyricsfile } from "./word-lyrics-fixture";
+const controllerSimulation = new URLSearchParams(location.search).has("controller") ? (await import("./controller-fixture")).installControllerFixture() : null;
+const realNativeInvoke = window.__TAURI_INTERNALS__?.invoke;
+const nativeController = new URLSearchParams(location.search).has("native-controller");
 
 Object.assign(window, { isTauri: true });
 mockWindows("main");
@@ -54,6 +57,8 @@ if (friendLibrary) {
   for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
 }
 if (lyricsScenario) for (const track of tracks) track.title += ` · ${lyricsScenario} lyrics preview`;
+if (new URLSearchParams(location.search).has("long")) for (let index = 0; index < 20; index++) tracks.push({ ...tracks[0],
+  id: `controller-long-${index}`, title: `Controller track ${index + 1}`, track_number: index + 4 });
 if (new URLSearchParams(location.search).has("long-title")) tracks[0].title = "A very long recording title, with an extended edition and a little more room for the music to breathe";
 const library: Library = { revision: 1, albums, tracks };
 const connectionScenario = new URLSearchParams(location.search).get("connection");
@@ -95,6 +100,16 @@ if (new URLSearchParams(location.search).has("clock")) window.setInterval(() => 
 }, 100);
 mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
+  if (command === "remote_settings") return { enabled: false, address: null, url: null, qr_svg: null, expires_in: 0, phones: 0,
+    interfaces: [{ name: "Fixture Ethernet", address: "192.0.2.10" }, { name: "Fixture Wi-Fi", address: "192.0.2.20" }] };
+  if (command === "controller_foreground") return nativeController && realNativeInvoke ? realNativeInvoke(command, payload) : controllerSimulation?.foreground ?? true;
+  if (nativeController && realNativeInvoke && command.startsWith("plugin:window|")) return realNativeInvoke(command, payload);
+  if (command === "controller_playback") {
+    if (controllerSimulation?.foreground === false) throw new Error("Inactive fixture window");
+    if (payload.action === "pause") status = { ...status, paused: !status.paused };
+    else status = { ...status, position: Math.max(0, Math.min(status.duration, status.position + (payload.action === "forward" ? 10 : -10))) };
+    return { ...status };
+  }
   if (command === "plugin:window|is_fullscreen") return fullscreen;
   if (command === "plugin:window|set_fullscreen") { fullscreen = payload.value === true; console.info(`Fixture fullscreen ${fullscreen}`); return; }
   if (command === "updater_supported") return true;

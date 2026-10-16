@@ -25,6 +25,10 @@ For the Linux desktop, package installation and ALSA playback checks, see the [L
 
 Desktop playback tracks its own mpv processes and cleans up orphaned players after a crash. See [playback process cleanup](playback.md) for ownership checks and platform behavior.
 
+[Controller controls](controller.md) use a pure, tested sampler and local Settings mappings. The opt-in `controller` preview fixture provides simulated standard-controller input; native foreground checks remain enabled in the desktop app.
+
+Run `npx playwright install chromium` once in `apps/desktop`, then `npm run test:controller` for the isolated controller interface checks. They cover dropdown cancellation, draft/save/reset behavior, remapping persistence, switches and ranges, fullscreen Back, inactive/disconnected input, and navigation in both directions through a long track list. These use simulated input, not physical hardware.
+
 ## Local server development
 
 Install FFmpeg/FFprobe on PATH; MediaInfo is recommended. Run the following from the repository root:

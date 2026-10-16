@@ -1,0 +1,10 @@
+html[data-controller="true"] :focus { outline: 2px solid var(--accent); outline-offset: 4px; }
+.controller-settings { border-top: 1px solid var(--line); padding-top: 22px; }
+.controller-bindings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 18px; margin-top: 20px; }
+.controller-bindings .remote-network { margin-top: 0; }
+.controller-bindings .network-picker { min-height: 45px; font-size: 12px; }
+.controller-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+.controller-actions button { padding: 9px 12px; font-size: 12px; }
+.controller-help { margin-top: 16px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.controller-help p { margin: 0; }
+.controller-settings .network-options { max-height: 210px; }

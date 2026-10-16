@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod controller;
 mod credentials;
 mod discord;
 #[cfg(any(target_os = "linux", test))]
@@ -274,6 +275,46 @@ fn complete_remote_command(id: String, error: Option<String>, state: State<'_, N
     state.remote.complete(id, error);
 }
 
+#[tauri::command]
+fn controller_foreground(window: tauri::WebviewWindow) -> bool {
+    controller::foreground(&window)
+}
+
+#[tauri::command]
+async fn controller_playback(
+    action: controller::PlaybackAction,
+    window: tauri::WebviewWindow,
+    state: State<'_, NativeState>,
+) -> Result<PlaybackStatus, String> {
+    if !controller::foreground(&window) {
+        return Err("Spatial is not the foreground window.".into());
+    }
+    let updating = state.updating.lock().await;
+    if *updating {
+        return Err("Spatial is restarting to install an update.".into());
+    }
+    let mut player = state.player.lock().await;
+    let status = player.poll().await;
+    if !status.active || !controller::foreground(&window) {
+        return Ok(status);
+    }
+    match action {
+        controller::PlaybackAction::Pause => player.pause().await?,
+        controller::PlaybackAction::Rewind | controller::PlaybackAction::Forward => {
+            if let Some(position) = controller::seek_position(
+                status.position,
+                status.duration,
+                matches!(action, controller::PlaybackAction::Forward),
+            ) {
+                player.seek(position).await?;
+            }
+        }
+    }
+    let status = player.poll().await;
+    state.discord.playback(&status);
+    Ok(status)
+}
+
 fn main() {
     #[cfg(target_os = "linux")]
     let software_rendering = linux_rendering::configure_before_threads();
@@ -328,7 +369,9 @@ fn main() {
             publish_remote_state,
             publish_remote_library,
             remote_command_pending,
-            complete_remote_command
+            complete_remote_command,
+            controller_foreground,
+            controller_playback
         ])
         .build(tauri::generate_context!())
         .expect("Cannot initialize Spatial");

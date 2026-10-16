@@ -21,6 +21,8 @@ import LyricsSidebar from "./LyricsSidebar";
 import { clampLyricsWidth, loadLyricsWidth, maxLyricsWidth } from "./lyricsLayout";
 import { useArtworkTheme } from "./useArtworkTheme";
 import { isSpatialMix } from "./mixes";
+import { useController } from "./useController";
+import ControllerSettings from "./ControllerSettings";
 import type { Album, AudioDevice, Library, PlaybackStatus, RememberedConnection, Track } from "./types";
 
 const emptyStatus: PlaybackStatus = { track_id: null, active: false, paused: false, ended: false,
@@ -489,6 +491,23 @@ function AppContent() {
   };
   const playbackProgress = { position: seekPosition ?? status.position, duration: status.duration || current?.duration || 0,
     disabled: !status.active || starting, onScrub: setSeekPosition, onSeek: commitSeek };
+  const controller = useController(async command => {
+    if (command === "back") {
+      if (modal) setModal(null);
+      else if (listening.open) listening.close();
+      else if (selectedAlbum) { setSelectedAlbum(null); setSearch(""); }
+      else if (selecting) setSelecting(false);
+      else if (lyricsOpen) closeLyrics();
+      return;
+    }
+    if (!catalog || modal) return;
+    if (command === "fullscreen") {
+      if (listening.open) listening.close(); else if (current) listening.enter();
+    } else if (["pause", "rewind", "forward"].includes(command) && status.active && !starting) {
+      try { setSeekPosition(null); setStatus(await call<PlaybackStatus>("controller_playback", { action: command })); }
+      catch (error) { setError(String(error)); }
+    }
+  });
 
   if (!catalog) return <motion.main className="connect-screen" data-reduced-motion={reduced ? "true" : undefined} style={theme as CSSProperties} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .45, ease }}>
     <div className="connect-art"><div className="orbital orbital-one" /><div className="orbital orbital-two" /><div className="orbital orbital-three" />
@@ -564,7 +583,7 @@ function AppContent() {
       active={status.active && status.track_id === current.id} position={status.track_id === current.id ? status.position : 0}
       controls={playbackControls} progress={playbackProgress} favorite={favorites.tracks.includes(current.id)}
       onFavorite={() => toggleFavorite("tracks", current.id)} onClose={listening.close} onSeek={commitSeek} error={listening.error || error} />}</AnimatePresence>
-    <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><RemoteSettings /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
+    <AnimatePresence>{modal === "settings" && <DialogTransition key="settings" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><h2 id="modal-title">Settings</h2><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div><DiscordSettings preferences={discordPreferences} /><RemoteSettings /><ControllerSettings controller={controller} /><div className="modal-footer settings-actions"><button className="primary" onClick={() => setModal(null)}>Done</button></div></DialogTransition>}
     {modal === "output" && <DialogTransition key="output" dialogRef={dialogRef} onClose={() => setModal(null)}><div className="modal-heading"><div><span className="eyebrow">DIRECT TO YOUR RECEIVER</span><h2 id="modal-title">Audio output</h2></div><button className="icon-button" aria-label="Close dialog" onClick={() => setModal(null)}><X size={22} /></button></div>
       <p className="modal-description">Select the HDMI output connected to your Atmos receiver. Spatial requests direct Dolby passthrough.</p><div className="output-mode"><Layers3 size={20} /><div><strong>Original Dolby bitstream</strong><span>E-AC-3 / TrueHD · receiver controls volume</span></div><span className="mode-pill">EXCLUSIVE</span></div>
         {loadingDevices ? <div className="loading"><LoaderCircle className="spin" size={20} /> Finding audio endpoints…</div> : devices.map(item => <button className={`device-option ${device === item.name ? "selected" : ""}`} key={item.name} onClick={async () => { if (status.active && item.name !== device) { await action("stop_playback"); setStatus(emptyStatus); } setDevice(item.name); localStorage.setItem("spatial-output", item.name); setError(""); }}><Speaker size={20} /><span>{item.description}</span>{device === item.name && <Check size={19} />}</button>)}
