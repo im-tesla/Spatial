@@ -263,6 +263,7 @@ impl Player {
                     "--keep-open=no",
                     "--cache=yes",
                     "--demuxer-max-bytes=67108864",
+                    "--audio-buffer=0.8",
                 ])
                 .arg(format!("--ao={}", output_driver()))
                 .arg(format!("--audio-device={device}"))
