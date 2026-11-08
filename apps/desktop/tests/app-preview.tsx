@@ -27,6 +27,9 @@ const albums = [
 ];
 const showcase = new URLSearchParams(location.search).has("showcase");
 const lyricsScenario = new URLSearchParams(location.search).get("lyrics");
+const sidecarScenario = new URLSearchParams(location.search).get("sidecar");
+const localLyricsFixture = JSON.parse(wordLyricsfile) as { lines: { text: string; start_ms: number; end_ms: number;
+  words?: { text: string; start_ms: number; end_ms: number }[] }[] };
 const friendLibrary = new URLSearchParams(location.search).get("library") === "friend";
 if (showcase) albums.push(
   { id: "fixture-tidal", title: "Tidal Forms", artist: "Lowlight", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-blue" },
@@ -46,12 +49,6 @@ if (showcase) {
     }));
   }
 }
-// Opt-in collection fixture includes title matches and an artist-only non-match.
-if (new URLSearchParams(location.search).has("mixes")) tracks.push(
-  { ...tracks[0], id: "fixture-mix-one", title: "A quiet room (Spatial Mix)" },
-  { ...tracks[1], id: "fixture-mix-two", title: "A little space — MIXED BY TESLA", artwork_id: "fixture-blue" },
-  { ...tracks[2], id: "fixture-not-a-mix", title: "Every note comes home", artist: "Spatial Mix" },
-);
 if (friendLibrary) {
   for (const album of albums) album.id = `friend-${album.id}`;
   for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
@@ -147,6 +144,15 @@ mockIPC((command, args) => {
       error: offline ? connectionScenario === "invalid" ? "The server rejected your access token." : "Cannot reach Spatial. Check the server address, service and firewall." : null };
   }
   if (command === "get_library" || command === "connect_server") return library;
+  if (command === "get_track_lyrics") {
+    if (sidecarScenario === "offline") throw new Error("Synthetic unavailable server");
+    if (sidecarScenario === "invalid") return { plainLyrics: "Invalid fixture", lines: [{ time: -1, text: "Invalid" }] };
+    if (sidecarScenario !== "words" && sidecarScenario !== "lines") return null;
+    return { plainLyrics: localLyricsFixture.lines.map(line => line.text).join("\n"), lines: localLyricsFixture.lines.map(line => ({
+      text: line.text, time: line.start_ms / 1000, end: line.end_ms / 1000,
+      ...(sidecarScenario === "words" && line.words ? { words: line.words.map(word => ({ text: word.text, start: word.start_ms / 1000, end: word.end_ms / 1000 })) } : {}),
+    })) };
+  }
   if (command === "get_artwork") return covers.get(String(payload.id));
   if (command === "audio_devices") return [{ name: "fixture-hdmi", description: "Simulated HDMI endpoint" }];
   if (command === "playback_status") return { ...status };
@@ -159,6 +165,7 @@ mockIPC((command, args) => {
 const realFetch = window.fetch;
 window.fetch = async (input, options) => {
   if (!String(input).startsWith("https://lrclib.net/api/get?")) return realFetch(input, options);
+  console.info("Fixture LRCLIB request");
   if (lyricsScenario === "missing") return new Response(null, { status: 404 });
   if (lyricsScenario === "offline") throw new TypeError("Synthetic offline lyrics fixture");
   return Response.json({ id: 987654322, duration: 20, instrumental: lyricsScenario === "instrumental",

@@ -121,6 +121,14 @@ async fn get_artwork(id: String, state: State<'_, NativeState>) -> Result<String
 }
 
 #[tauri::command]
+async fn get_track_lyrics(
+    id: String,
+    state: State<'_, NativeState>,
+) -> Result<Option<spatial_core::SidecarLyrics>, String> {
+    session(&state).await?.lyrics(&id).await
+}
+
+#[tauri::command]
 async fn audio_devices() -> Result<Vec<AudioDevice>, String> {
     playback::devices().await
 }
@@ -350,6 +358,7 @@ fn main() {
             disconnect_server,
             get_library,
             get_artwork,
+            get_track_lyrics,
             audio_devices,
             play_track,
             playback_status,

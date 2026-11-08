@@ -44,6 +44,14 @@ pub async fn open(data_dir: &Path) -> Result<SqlitePool> {
             .execute(&pool)
             .await?;
     }
+    if !columns
+        .iter()
+        .any(|row| row.get::<&str, _>("name") == "lyrics_stamp")
+    {
+        sqlx::query("ALTER TABLE tracks ADD COLUMN lyrics_stamp TEXT NOT NULL DEFAULT ''")
+            .execute(&pool)
+            .await?;
+    }
     Ok(pool)
 }
 

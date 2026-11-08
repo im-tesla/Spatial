@@ -12,6 +12,67 @@ pub struct Session {
     token: String,
 }
 
+#[cfg(test)]
+mod lyrics_tests {
+    use super::*;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    #[tokio::test]
+    async fn local_lyrics_use_authenticated_server_ipc_and_support_older_servers() {
+        const ID: &str = "3c464e57-3fa6-4e1f-b5c4-b2d28251c767";
+        let body = r#"{"plainLyrics":"A room","lines":[{"time":1,"end":3,"text":"A room","words":[{"text":"A ","start":1,"end":1.4},{"text":"room","start":2,"end":3}]}]}"#;
+        for (status, body, present) in [
+            ("200 OK", body, true),
+            ("200 OK", "null", false),
+            ("404 Not Found", "", false),
+        ] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let server = tokio::spawn(async move {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                loop {
+                    let mut bytes = [0; 1024];
+                    let count = stream.read(&mut bytes).await.unwrap();
+                    assert!(count > 0 && request.len() < 8192);
+                    request.extend_from_slice(&bytes[..count]);
+                    if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                let request = String::from_utf8(request).unwrap();
+                assert!(request.starts_with(&format!("GET /api/tracks/{ID}/lyrics HTTP/1.1\r\n")));
+                assert!(
+                    request
+                        .to_ascii_lowercase()
+                        .contains("authorization: bearer spatial-lyrics-test-token\r\n")
+                );
+                stream.write_all(response.as_bytes()).await.unwrap();
+            });
+            let session =
+                Session::new(&format!("http://{address}"), "spatial-lyrics-test-token").unwrap();
+            let lyrics = session.lyrics(ID).await.unwrap();
+            assert_eq!(lyrics.is_some(), present);
+            if let Some(lyrics) = lyrics {
+                assert_eq!(lyrics.lines[0].words[1].start, 2.0);
+            }
+            server.await.unwrap();
+        }
+        let session = Session::new("http://127.0.0.1:1", "spatial-lyrics-test-token").unwrap();
+        assert_eq!(
+            session.lyrics("../private").await.unwrap_err(),
+            "Invalid track identifier"
+        );
+    }
+}
+
 impl Session {
     pub fn new(address: &str, token: &str) -> Result<Self, String> {
         let mut base = Url::parse(address.trim())
@@ -131,6 +192,41 @@ impl Session {
             "data:image/jpeg;base64,{}",
             base64::engine::general_purpose::STANDARD.encode(bytes)
         ))
+    }
+
+    pub async fn lyrics(&self, id: &str) -> Result<Option<spatial_core::SidecarLyrics>, String> {
+        if uuid::Uuid::parse_str(id).is_err() {
+            return Err("Invalid track identifier".into());
+        }
+        // Older servers have no lyrics route. Treat 404 as an absent sidecar.
+        let response = self
+            .client
+            .get(
+                self.base
+                    .join(&format!("api/tracks/{id}/lyrics"))
+                    .map_err(|e| e.to_string())?,
+            )
+            .bearer_auth(&self.token)
+            .timeout(Duration::from_secs(12))
+            .send()
+            .await
+            .map_err(|_| "Could not reach the server for local lyrics")?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !response.status().is_success() {
+            return Err("Could not load local lyrics from the server".into());
+        }
+        let mut stream = response.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|_| "Could not read local lyrics")?;
+            if bytes.len() + chunk.len() > 4 * 1024 * 1024 {
+                return Err("Local lyrics response is too large".into());
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&bytes).map_err(|_| "Invalid local lyrics response".into())
     }
 
     pub async fn events(self, app: tauri::AppHandle) {

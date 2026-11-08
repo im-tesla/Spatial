@@ -9,9 +9,10 @@ import type { Track } from "./types";
 import LyricText from "./LyricText";
 import { softwareRendering } from "./rendering";
 import "./lyrics.css";
+import { call } from "./api";
 
-export default function LyricsPanel({ track, position, playing, onSeek, variant = "sidebar", paused = false }: {
-  track: Track | null; position: number; playing: boolean; onSeek: (seconds: number) => void; variant?: "sidebar" | "fullscreen"; paused?: boolean;
+export default function LyricsPanel({ track, position, playing, onSeek, variant = "sidebar", paused = false, sourceKey = "" }: {
+  track: Track | null; position: number; playing: boolean; onSeek: (seconds: number) => void; variant?: "sidebar" | "fullscreen"; paused?: boolean; sourceKey?: string;
 }) {
   const reduced = useReducedMotion();
   const [lyrics, setLyrics] = useState<Lyrics | null>(null);
@@ -22,7 +23,7 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
   const [paneHeight, setPaneHeight] = useState(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const signature = JSON.stringify(track && [track.title, track.artist, track.album, track.duration]);
+  const signature = JSON.stringify(track && [sourceKey, track.id, track.title, track.artist, track.album, track.duration]);
 
   useEffect(() => {
     const pane = scrollRef.current;
@@ -36,7 +37,7 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
     let cancelled = false;
     setLyrics(null); setError(""); setFollowing(true); setLoading(!!track);
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
-    if (track) getLyrics(track).then(value => { if (!cancelled) setLyrics(value); })
+    if (track) getLyrics(track, { key: sourceKey, load: id => call("get_track_lyrics", { id }) }).then(value => { if (!cancelled) setLyrics(value); })
       .catch(e => { if (!cancelled) setError(e instanceof Error ? e.message : "Could not load lyrics."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
@@ -89,8 +90,8 @@ export default function LyricsPanel({ track, position, playing, onSeek, variant 
             : <span className="lyric-gap" aria-label="Instrumental passage"><i /><i /><i /></span>}
         </motion.button>)}</motion.div>
         : plain ? <motion.div className="lyrics-lines plain-lyrics" key={signature} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reduced ? 0 : .4, ease }}>{plain.split(/\r?\n/).map((line, index) => <p className="lyric-line" key={index}>{line || "\u00a0"}</p>)}</motion.div>
-        : <div className="lyrics-empty"><Music2 size={32} /><h3>{!track ? "Music first, words next." : lyrics?.instrumental ? "Let the music speak." : "No lyrics available yet"}</h3><p>{!track ? "Play a track to see its lyrics here." : lyrics?.instrumental ? "This recording is instrumental." : "LRCLIB doesn't have matching lyrics for this recording."}</p></div>}
+        : <div className="lyrics-empty"><Music2 size={32} /><h3>{!track ? "Music first, words next." : lyrics?.instrumental ? "Let the music speak." : "No lyrics available yet"}</h3><p>{!track ? "Play a track to see its lyrics here." : lyrics?.instrumental ? "This recording is instrumental." : "No matching lyrics were found for this recording."}</p></div>}
     </div>
-    <div className="lyrics-credit"><span>Lyrics from <a href="https://lrclib.net" target="_blank" rel="noreferrer">LRCLIB</a></span><span>{synced && playing ? "Click a line to seek" : ""}</span></div>
+    <div className="lyrics-credit"><span>{lyrics?.source === "ttml" ? "Local TTML" : lyrics ? <>Lyrics from <a href="https://lrclib.net" target="_blank" rel="noreferrer">LRCLIB</a></> : ""}</span><span>{synced && playing ? "Click a line to seek" : ""}</span></div>
   </div>;
 }

@@ -46,3 +46,27 @@ pub struct PlaybackGrant {
     pub expires: u64,
     pub track: Track,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LyricWord {
+    pub text: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LyricLine {
+    pub time: f64,
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<f64>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub words: Vec<LyricWord>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarLyrics {
+    pub plain_lyrics: String,
+    pub lines: Vec<LyricLine>,
+}

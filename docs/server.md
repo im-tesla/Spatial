@@ -94,7 +94,15 @@ Enter the same access token configured on the server. After a successful connect
 
 Place tagged audio files in the configured media directory. Albums use album, album artist, artist, date, disc, track and release identifiers. Folder and filename conventions are optional. Missing tags use Unknown artist/album and the filename as the title; compilation tags support Various Artists.
 
-For MP4/M4A files, the standard title (`©nam`, also displayed by Windows file properties) takes precedence over conflicting freeform `TITLE` tags. Spatial Mixes includes tracks whose title contains `Spatial Mix`, regardless of capitalization; the previous `mixed by tesla` credit remains supported. Existing MP4 catalog entries are refreshed automatically on the first scan after this metadata-reader update, preserving track IDs and favorites.
+For MP4/M4A files, the standard title (`©nam`, also displayed by Windows file properties) takes precedence over conflicting freeform `TITLE` tags. Existing MP4 catalog entries are refreshed automatically on the first scan after this metadata-reader update, preserving track IDs and favorites.
+
+### Local lyrics
+
+Place a UTF-8 `.ttml` file with exactly the same stem beside its audio file, for example `Artist/Album/01 Track.m4a` and `Artist/Album/01 Track.ttml`. An uppercase `.TTML` extension also works. The folder structure is arbitrary; albums continue to come from embedded metadata.
+
+The authenticated `GET /api/tracks/{id}/lyrics` endpoint reads the sidecar and returns normalized line and word cues. Missing, partially copied, malformed or unsupported files return `null`, allowing the desktop's LRCLIB fallback. The endpoint never exposes filesystem paths or accepts a client-supplied filename. Sidecars must resolve inside the configured media directory and be at most 1 MiB.
+
+Adding, editing or removing a sidecar produces a library revision through the existing watcher and periodic scans, without re-probing the audio or changing track IDs. Connected lyrics views reload on that revision. Update both server and desktop for local TTML support; the updated desktop still falls back to LRCLIB with older servers.
 
 Embedded artwork is preferred. Adjacent `cover.jpg`, `cover.png` or `folder.jpg` is a fallback. Source files are never rewritten or transcoded. Conflicting dates or release identifiers can split editions into separate albums; Spatial does not retag files or fetch replacement metadata.
 

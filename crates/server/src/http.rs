@@ -14,7 +14,7 @@ use axum::{
 use hmac::{Hmac, Mac};
 use serde::Deserialize;
 use sha2::Sha256;
-use spatial_core::{Library, PlaybackGrant};
+use spatial_core::{Library, PlaybackGrant, SidecarLyrics};
 use sqlx::Row;
 use std::{
     convert::Infallible,
@@ -54,6 +54,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/library", get(library))
         .route("/api/events", get(events))
         .route("/api/tracks/{id}/playback", post(grant))
+        .route("/api/tracks/{id}/lyrics", get(lyrics))
         .route("/api/artwork/{id}", get(artwork))
         .route_layer(middleware::from_fn_with_state(state.clone(), authorize));
     Router::new()
@@ -84,6 +85,31 @@ async fn authorize(State(state): State<AppState>, request: Request, next: Next) 
 
 async fn library(State(state): State<AppState>) -> ApiResult<Json<Library>> {
     Ok(Json(db::library(&state.pool).await?))
+}
+
+async fn lyrics(State(state): State<AppState>, Path(id): Path<String>) -> ApiResult<Response> {
+    let path: String = sqlx::query_scalar("SELECT source_path FROM tracks WHERE id=?")
+        .bind(id)
+        .fetch_optional(&state.pool)
+        .await?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Track not found".into()))?;
+    // A missing, partially copied or invalid sidecar leaves the service fallback available.
+    let value: Option<SidecarLyrics> =
+        match crate::lyrics::load(std::path::Path::new(&path), &state.media_root).await {
+            Ok(value) => value,
+            Err(error) => {
+                tracing::warn!(%error, "Local lyrics unavailable; client may use its fallback");
+                None
+            }
+        };
+    Ok((
+        [
+            (header::CACHE_CONTROL, "private, no-store"),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+        ],
+        Json(value),
+    )
+        .into_response())
 }
 
 fn event(revision: u64) -> Result<Event, Infallible> {

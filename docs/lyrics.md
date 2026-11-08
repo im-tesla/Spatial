@@ -6,6 +6,25 @@ The lyrics panel remains adjustable. Drag its left edge, or focus the resize han
 
 Both views show **Word-synced lyrics** when validated word timestamps are available, or **Line-synced lyrics** for line timing. Untimed text shows **Plain lyrics · timing unavailable**.
 
-Spatial uses LRCLIB's metadata lookup and local cache. When its [Lyricsfile](https://github.com/tranxuanthang/lyricsfile) response includes word timestamps, each word highlights at its own cue in both views. Supplied word ends are respected; without one, the highlight lasts until the next supplied word cue or line end. Text stays readable throughout, including wrapped lines. Recordings with only line timestamps highlight the current line without a moving fill or invented word timing. Word-sync coverage depends on the recording; plain lyrics remain readable without timed highlights.
+Spatial first requests local lyrics from the server. Put a UTF-8 TTML file beside the audio with the same stem:
+
+```text
+media/
+  Artist/
+    Album/
+      01 Track.m4a
+      01 Track.ttml
+      Cover.jpg
+```
+
+No folder mapping or manual import is needed. The server resolves the sidecar from the indexed audio path. Adding, editing or removing it refreshes connected lyrics panels through library updates without re-indexing audio. Both server and desktop need this feature; an older server remains compatible through the fallback.
+
+Apple Music's song-relative line timestamps and timed word/syllable spans are supported, including nested spans, XML entities, Unicode, explicit ends and overlapping vocal lines. Backing-vocal spans (`ttm:role="x-bg"`) retain independent word timelines when they overlap the lead vocal. The parser also accepts standard TTML parent-relative clock and second/minute/hour/millisecond offsets. Unsupported frame/tick or sequential timing, malformed XML, external entities and files larger than 1 MiB use the fallback. Apple container duration hints do not override explicit later line/word cues.
+
+**Local TTML** appears in the credit when the sidecar is used. A file with timestamps on `<p>` lines but no timed `<span>` elements is line-synced, even if its exporter calls it word-synced. Spatial uses supplied word timing and never estimates it from a line's duration.
+
+If the sidecar is absent or unusable, Spatial uses LRCLIB's metadata lookup and local cache. When its [Lyricsfile](https://github.com/tranxuanthang/lyricsfile) response includes word timestamps, each word highlights at its own cue in both views. Supplied word ends are respected; without one, the highlight lasts until the next supplied word cue or line end. Text stays readable throughout, including wrapped lines. Plain service lyrics remain readable without timed highlights.
+
+Valid local TTML does not contact a lyrics provider. Fallback lookups send recording metadata to LRCLIB, never audio or the server access token. Service results are cached locally; local sidecars are checked first even when a service result is already cached.
 
 Word highlights follow native playback time and freeze on pause; seeking selects the correct word immediately. Interlude dots and artwork motion pause with playback. Reduced motion keeps the typography and timed word emphasis while disabling movement and glow. Linux's X11 renderer fallback also uses solid word emphasis and cached softened artwork, reducing redraw cost while retaining cue scrolling and line transitions. No Spotify account, Spicetify installation or additional lyrics service is required.

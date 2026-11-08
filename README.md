@@ -14,7 +14,6 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 - **Stream original Dolby audio.** E-AC-3 and TrueHD passthrough through the desktop's HDMI output, with source files served without transcoding.
 - **Browse a live library.** Albums, artists, artwork and track order come from embedded tags. Filesystem changes reach connected clients automatically.
-- **Find Spatial Mixes.** A dedicated collection automatically gathers tracks with “Spatial Mix” in their titles, regardless of capitalization. The previous “mixed by tesla” credit is still recognized.
 - **Listen from your controller.** [Gamepad controls](docs/controller.md) cover navigation, play/pause, seeking and fullscreen, with configurable button mappings in Settings.
 - **Make it yours.** Save favorite albums and tracks locally, manage selections in bulk, and copy a favorites list to share with another Spatial listener.
 - **Follow the words.** [Synced lyrics](docs/lyrics.md) use glowing line highlights, soft focus and cover-colored backgrounds in the resizable side panel and fullscreen player. Click a line to seek, or keep browsing while the song continues.
@@ -87,7 +86,7 @@ This is an early preview. Playback currently supports the compressed E-AC-3 and 
 
 Albums are grouped by metadata rather than folder names. Consistent album, album-artist, date and release tags produce the best results. Embedded artwork is preferred, with adjacent cover images as a fallback.
 
-Favorites, panel width and output preferences stay on the client. Lyrics use [LRCLIB](https://lrclib.net/), with no account or API key: opening lyrics or the fullscreen player may send the track's title, artist, album and duration to the provider. Audio files and server credentials are not sent. Cached lyrics remain available offline; coverage depends on the recording.
+Favorites, panel width and output preferences stay on the client. Lyrics first use a matching `.ttml` file beside the audio on the server, including word timing when supplied. If local lyrics are missing or unreadable, Spatial falls back to [LRCLIB](https://lrclib.net/), with no account or API key. Only fallback lookups send the track's title, artist, album and duration to that provider; audio and server credentials are never sent. Cached service lyrics remain available offline; coverage depends on the recording. See the [lyrics guide](docs/lyrics.md) for sidecar naming and timing formats.
 
 In Favorites, **Copy favorites** creates a portable list that another client can paste into **Import favorites**. Matching albums and tracks already in that client's library are saved locally. Use **Select** to add or remove favorites in bulk, or copy just a selection. See the [favorites guide](docs/favorites.md) for details.
 

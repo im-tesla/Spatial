@@ -24,6 +24,7 @@ hex = "0.4"
 subtle = "2"
 unicode-normalization = "0.1"
 mp4ameta = "0.13"
+roxmltree = "0.21.1"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

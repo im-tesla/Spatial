@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseLrc, activeLyric, lyricsTitle, lyricWordState, timedLyrics, highlightedLyrics } from "../src/lyrics.ts";
+import { parseLrc, activeLyric, lyricWordState, timedLyrics, highlightedLyrics } from "../src/lyrics.ts";
 import { stringify } from "yaml";
 
 test("LRC handles repeated timestamps, fractions, CRLF and timed silence", () => {
@@ -90,26 +90,6 @@ function storage() {
 const track = { title: "Test & title", artist: "Spatial Test Artist", album: "Test / album", duration: 42.4 };
 const result = { id: 1, trackName: track.title, artistName: track.artist, albumName: track.album, duration: 42, instrumental: false, plainLyrics: "An original test line", syncedLyrics: "[00:02.00] An original test line" };
 
-test("lyrics searches remove the mix credit while preserving recording editions", async () => {
-  for (const title of ["Song (Spatial Mix)", "Song [SPATIAL MIX]", "Song — spatial mix", "Spatial Mix - Song", "Song (Mixed By Tesla)", "Song [mixed by tesla]", "Song — mixed by tesla", "mixed by tesla - Song", "Song mixed BY TESLA"])
-    assert.equal(lyricsTitle(title), "Song");
-  assert.equal(lyricsTitle("Song (Live) (Mixed By Tesla)"), "Song (Live)");
-  assert.equal(lyricsTitle("Song (Live) (Spatial Mix)"), "Song (Live)");
-  assert.equal(lyricsTitle("Spatial Mixture"), "Spatial Mixture");
-  assert.equal(lyricsTitle("Mixed by someone else"), "Mixed by someone else");
-  assert.equal(lyricsTitle("Song -"), "Song -");
-  globalThis.localStorage = storage();
-  const urls = [];
-  globalThis.fetch = async url => { urls.push(new URL(url)); return Response.json(result); };
-  const { getLyrics } = await import("../src/lyrics.ts?mix-title-test");
-  const decorated = { ...track, title: `${track.title} (Spatial Mix)` };
-  await getLyrics(decorated);
-  await getLyrics(track);
-  assert.equal(urls.length, 1);
-  assert.equal(urls[0].searchParams.get("track_name"), track.title);
-  assert.equal(decorated.title, `${track.title} (Spatial Mix)`);
-});
-
 test("lookup encodes metadata, deduplicates requests and reuses the local cache after restart", async () => {
   globalThis.localStorage = storage();
   const requests = [];
@@ -184,4 +164,84 @@ test("missing lyrics are cached while a wrong recording duration is rejected", a
   globalThis.fetch = async () => Response.json({ ...result, duration: 60 });
   const mismatch = await import("../src/lyrics.ts?mismatch-test");
   await assert.rejects(mismatch.getLyrics(track), /duration/);
+});
+
+const localTrack = { ...track, id: "local-track" };
+const sidecar = { plainLyrics: "A quiet room", lines: [{ time: 1, end: 4, text: "A quiet room", words: [
+  { text: "A ", start: 1, end: 1.3 }, { text: "quiet ", start: 1.7, end: 2.3 }, { text: "room", start: 3, end: 3.8 },
+] }] };
+
+test("local TTML takes priority over cached service lyrics and preserves real word cues", async () => {
+  globalThis.localStorage = storage();
+  let external = 0;
+  globalThis.fetch = async () => { external++; return Response.json(result); };
+  const { getLyrics } = await import("../src/lyrics.ts?local-priority");
+  await getLyrics(localTrack);
+  let local = 0;
+  const source = { key: "server-one:1", load: async id => { assert.equal(id, localTrack.id); local++; return sidecar; } };
+  const [first, second] = await Promise.all([getLyrics(localTrack, source), getLyrics(localTrack, source)]);
+  assert.equal(first.source, "ttml"); assert.deepEqual(first, second);
+  assert.equal(local, 1); assert.equal(external, 1);
+  assert.deepEqual(timedLyrics(first, 42)[0].words, sidecar.lines[0].words);
+  assert.deepEqual(timedLyrics(first, 42)[1], { time: 4, text: "" });
+});
+
+test("missing, invalid or unavailable sidecars fall back to the existing service cache", async () => {
+  globalThis.localStorage = storage();
+  let external = 0;
+  globalThis.fetch = async () => { external++; return Response.json(result); };
+  const { getLyrics } = await import("../src/lyrics.ts?local-fallback");
+  const invalid = { ...sidecar, lines: [{ time: -1, text: "Invalid" }] };
+  for (const load of [async () => null, async () => { throw new Error("Old/offline server"); }, async () => invalid]) {
+    const lyrics = await getLyrics(localTrack, { key: "server:1", load });
+    assert.equal(lyrics.id, result.id); assert.equal(lyrics.source, undefined);
+  }
+  assert.equal(external, 1);
+});
+
+test("line-only sidecars never invent word times and local lookups refresh across revisions", async () => {
+  globalThis.localStorage = storage();
+  globalThis.fetch = async () => { throw new Error("Local TTML must not contact a provider"); };
+  const { getLyrics } = await import("../src/lyrics.ts?local-refresh");
+  const lineOnly = { plainLyrics: "A quiet room", lines: [{ time: 10.46, end: 11.764, text: "A quiet room" }] };
+  const first = await getLyrics(localTrack, { key: "server:1", load: async () => lineOnly });
+  assert.equal(timedLyrics(first, 42)[0].time, 10.46); assert.equal(timedLyrics(first, 42)[0].words, undefined);
+  const edited = { ...lineOnly, lines: [{ time: 12.5, end: 13, text: "Edited" }] };
+  const second = await getLyrics(localTrack, { key: "server:2", load: async () => edited });
+  assert.equal(timedLyrics(second, 42)[0].time, 12.5);
+});
+
+test("in-flight local lookups are isolated between servers with identical track metadata", async () => {
+  const { getLyrics } = await import("../src/lyrics.ts?local-servers");
+  let resolve;
+  const waiting = new Promise(done => { resolve = done; });
+  const first = getLyrics(localTrack, { key: "server-one:1", load: () => waiting });
+  const second = await getLyrics(localTrack, { key: "server-two:1", load: async () => ({ ...sidecar, plainLyrics: "Second server" }) });
+  resolve(sidecar);
+  assert.equal(second.plainLyrics, "Second server"); assert.equal((await first).plainLyrics, sidecar.plainLyrics);
+});
+
+test("local sidecars remain available during provider rate limiting and outside lookup duration limits", async () => {
+  globalThis.localStorage = storage();
+  let external = 0;
+  globalThis.fetch = async () => { external++; return new Response(null, { status: 429, headers: { "Retry-After": "120" } }); };
+  const { getLyrics } = await import("../src/lyrics.ts?local-provider-independent");
+  await assert.rejects(getLyrics(track), /busy/);
+  const lyrics = await getLyrics({ ...localTrack, artist: "", duration: 7200 }, { key: "server:1", load: async () => sidecar });
+  assert.equal(lyrics.source, "ttml"); assert.equal(external, 1);
+});
+
+test("local lead and backing vocals retain both word timelines without a false instrumental gap", async () => {
+  const data = { plainLyrics: "Stay here\n(with me)\nAfterwards", lines: [
+    { time: 1, end: 4, text: "Stay here", words: [{ text: "Stay ", start: 1, end: 2.5 }, { text: "here", start: 3.5, end: 4 }] },
+    { time: 2, end: 3, text: "(with me)", words: [{ text: "(with ", start: 2, end: 2.5 }, { text: "me)", start: 2.5, end: 3 }] },
+    { time: 5, end: 6, text: "Afterwards" },
+  ] };
+  const { getLyrics } = await import("../src/lyrics.ts?local-backing-vocals");
+  const lyrics = await getLyrics(localTrack, { key: "backing-voices:1", load: async () => data });
+  assert.equal(lyrics.source, "ttml");
+  const lines = timedLyrics(lyrics, 10);
+  assert.deepEqual([...highlightedLyrics(lines, 2.25)], [1, 0]);
+  assert.equal(lines.some(line => line.time === 3 && line.text === ""), false);
+  assert.deepEqual(lines.find(line => line.time === 4), { time: 4, text: "" });
 });

@@ -339,6 +339,7 @@ struct Existing {
     modified: i64,
     hash: String,
     cover_stamp: String,
+    lyrics_stamp: String,
     artwork_id: Option<String>,
     metadata_version: i64,
 }
@@ -389,7 +390,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
     let rows = sqlx::query(
-        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp,metadata,metadata_version FROM tracks",
+        "SELECT id,source_path,file_size,modified_ms,content_hash,artwork_stamp,lyrics_stamp,metadata,metadata_version FROM tracks",
     )
     .fetch_all(&state.pool)
     .await?;
@@ -407,6 +408,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 modified: row.get("modified_ms"),
                 hash: row.get("content_hash"),
                 cover_stamp: row.get("artwork_stamp"),
+                lyrics_stamp: row.get("lyrics_stamp"),
                 artwork_id,
                 metadata_version: row.get("metadata_version"),
             };
@@ -414,9 +416,11 @@ pub async fn scan(state: &AppState) -> Result<usize> {
         })
         .collect();
     let mut candidates = Vec::new();
+    let mut lyrics_updates = Vec::new();
     for path in files {
         let (size, modified) = fingerprint(&path).await?;
         let stamp = cover_stamp(&path).await;
+        let lyrics_stamp = crate::lyrics::stamp(&path).await;
         let key = path.to_string_lossy().into_owned();
         if existing.get(&key).is_some_and(|e| {
             e.size == size
@@ -424,16 +428,20 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                 && e.cover_stamp == stamp
                 && (!is_mp4(&path) || e.metadata_version >= METADATA_VERSION)
         }) {
+            let previous = &existing[&key];
+            if previous.lyrics_stamp != lyrics_stamp {
+                lyrics_updates.push((previous.id.clone(), lyrics_stamp));
+            }
             continue;
         }
-        candidates.push((path, size, modified, stamp));
+        candidates.push((path, size, modified, stamp, lyrics_stamp));
     }
     if !candidates.is_empty() {
         tokio::time::sleep(Duration::from_millis(state.config.settle_ms)).await;
     }
     let mut updates = Vec::new();
     let mut moved = HashSet::new();
-    for (path, size, modified, stamp) in candidates {
+    for (path, size, modified, stamp, lyrics_stamp) in candidates {
         let result: Result<_> = async {
             if fingerprint(&path).await? != (size, modified) {
                 bail!("File is still being copied");
@@ -476,7 +484,7 @@ pub async fn scan(state: &AppState) -> Result<usize> {
                     previous.and_then(|e| e.artwork_id.clone())
                 }
             };
-            Ok((track, key, size, modified, hash, stamp))
+            Ok((track, key, size, modified, hash, stamp, lyrics_stamp))
         }
         .await;
         match result {
@@ -491,13 +499,18 @@ pub async fn scan(state: &AppState) -> Result<usize> {
     }
     let mut tx = state.pool.begin().await?;
     let mut changed = 0;
-    for (track, path, size, modified, hash, stamp) in updates {
-        sqlx::query("INSERT INTO tracks(id,source_path,file_size,modified_ms,content_hash,metadata,artwork_stamp,metadata_version)
-            VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source_path=excluded.source_path,
+    for (track, path, size, modified, hash, stamp, lyrics_stamp) in updates {
+        sqlx::query("INSERT INTO tracks(id,source_path,file_size,modified_ms,content_hash,metadata,artwork_stamp,metadata_version,lyrics_stamp)
+            VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET source_path=excluded.source_path,
             file_size=excluded.file_size,modified_ms=excluded.modified_ms,content_hash=excluded.content_hash,
-            metadata=excluded.metadata,artwork_stamp=excluded.artwork_stamp,metadata_version=excluded.metadata_version")
+            metadata=excluded.metadata,artwork_stamp=excluded.artwork_stamp,metadata_version=excluded.metadata_version,lyrics_stamp=excluded.lyrics_stamp")
             .bind(&track.id).bind(path).bind(size).bind(modified).bind(hash)
-            .bind(serde_json::to_string(&track)?).bind(stamp).bind(METADATA_VERSION).execute(&mut *tx).await?;
+            .bind(serde_json::to_string(&track)?).bind(stamp).bind(METADATA_VERSION).bind(lyrics_stamp).execute(&mut *tx).await?;
+        changed += 1;
+    }
+    for (id, stamp) in lyrics_updates {
+        sqlx::query("UPDATE tracks SET lyrics_stamp=? WHERE id=?")
+            .bind(stamp).bind(id).execute(&mut *tx).await?;
         changed += 1;
     }
     for entry in existing.values() {

@@ -11,9 +11,9 @@ import { softwareRendering } from "./rendering";
 import type { Track } from "./types";
 import "./fullscreen.css";
 
-export default function FullscreenPlayer({ track, active, position, controls, progress, favorite, onFavorite, onClose, onSeek, error }: {
+export default function FullscreenPlayer({ track, active, position, controls, progress, favorite, onFavorite, onClose, onSeek, error, sourceKey }: {
   track: Track; active: boolean; position: number; controls: PlaybackControlsProps; progress: PlaybackProgressProps;
-  favorite: boolean; onFavorite: () => void; onClose: () => void; onSeek: (seconds: number) => void; error: string;
+  favorite: boolean; onFavorite: () => void; onClose: () => void; onSeek: (seconds: number) => void; error: string; sourceKey?: string;
 }) {
   const reduced = useReducedMotion();
   const present = useIsPresent();
@@ -72,7 +72,7 @@ export default function FullscreenPlayer({ track, active, position, controls, pr
       </motion.div>
       <motion.div className="listening-lyrics" initial={{ opacity: 0, x: reduced ? 0 : 24 }} animate={{ opacity: 1, x: 0 }}
         transition={{ duration: reduced ? 0 : .9, delay: reduced ? 0 : .18, ease }}>
-        <LyricsPanel variant="fullscreen" track={track} position={position} playing={active} paused={!controls.playing} onSeek={onSeek} />
+        <LyricsPanel variant="fullscreen" track={track} position={position} playing={active} paused={!controls.playing} onSeek={onSeek} sourceKey={sourceKey} />
       </motion.div>
     </div>
   </motion.section>;

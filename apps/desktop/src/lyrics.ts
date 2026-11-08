@@ -4,7 +4,9 @@ import { parse as parseYaml } from "yaml";
 
 export type LyricWord = { text: string; start: number; end: number };
 export type LyricLine = { time: number; text: string; end?: number; words?: LyricWord[] };
-export type Lyrics = { id: number; instrumental: boolean; plainLyrics: string | null; syncedLyrics: string | null; lyricsfile?: string | null };
+export type Lyrics = { id: number; instrumental: boolean; plainLyrics: string | null; syncedLyrics: string | null; lyricsfile?: string | null;
+  source?: "ttml"; timedLines?: LyricLine[] };
+export type LyricsSource = { key: string; load: (id: string) => Promise<unknown> };
 
 // Keep empty timed lines: they mark instrumental passages and the end of singing.
 export function parseLrc(source: string): LyricLine[] {
@@ -44,6 +46,7 @@ export function highlightedLyrics(lines: LyricLine[], position: number): Set<num
 
 // LRCLIB's Lyricsfile 1.0 carries real word cues; ordinary LRC only has line cues.
 export function timedLyrics(lyrics: Lyrics | null, duration: number): LyricLine[] {
+  if (lyrics?.source === "ttml" && lyrics.timedLines?.length) return withInterludes(lyrics.timedLines, duration);
   const fallback = () => parseLrc(lyrics?.syncedLyrics || "");
   if (!lyrics?.lyricsfile || lyrics.lyricsfile.length > 256000) return fallback();
   try {
@@ -78,14 +81,70 @@ export function timedLyrics(lyrics: Lyrics | null, duration: number): LyricLine[
       // Preserve punctuation/spacing, and reject mismatched or incomplete word data.
       if (cues.length === words.length && cues.map(word => word.text).join("").trim() === line.text.trim()) line.words = cues;
     }
-    const withGaps: LyricLine[] = [];
-    for (const [index, line] of lines.entries()) {
-      withGaps.push(line);
-      if (line.end !== undefined && line.end > line.time && line.end < (lines[index + 1]?.time ?? duration))
-        withGaps.push({ time: line.end, text: "" });
-    }
-    return withGaps;
+    return withInterludes(lines, duration);
   } catch { return fallback(); }
+}
+
+function withInterludes(lines: LyricLine[], duration: number): LyricLine[] {
+  const result: LyricLine[] = [];
+  let singingUntil = 0;
+  for (const [index, line] of lines.entries()) {
+    result.push(line);
+    const next = lines[index + 1]?.time ?? duration;
+    singingUntil = Math.max(singingUntil, line.end ?? (line.words?.length ? Math.max(...line.words.map(word => word.end)) : next));
+    if (singingUntil > line.time && singingUntil < next) result.push({ time: singingUntil, text: "" });
+  }
+  return result;
+}
+
+function localLyrics(value: unknown): Lyrics | null {
+  if (!value || typeof value !== "object") return null;
+  const data = value as { plainLyrics?: unknown; lines?: unknown };
+  if (typeof data.plainLyrics !== "string" || data.plainLyrics.length > 1024 * 1024
+    || !Array.isArray(data.lines) || !data.lines.length || data.lines.length > 3000) return null;
+  const lines: LyricLine[] = [];
+  let words = 0;
+  const timestamp = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 86400;
+  for (const line of data.lines) {
+    if (!line || !timestamp(line.time) || typeof line.text !== "string" || line.text.length > 16384
+      || (lines.length && line.time < lines[lines.length - 1].time)
+      || (line.end !== undefined && (!timestamp(line.end) || line.end < line.time))) return null;
+    const row: LyricLine = { time: line.time, text: line.text, ...(line.end !== undefined ? { end: line.end } : {}) };
+    if (line.words !== undefined) {
+      if (!Array.isArray(line.words)) return null;
+      words += line.words.length;
+      if (words > 20000) return null;
+      const cues: LyricWord[] = [];
+      for (const word of line.words) {
+        if (!word || typeof word.text !== "string" || !word.text || !timestamp(word.start) || !timestamp(word.end)
+          || word.start < row.time || word.end < word.start || (row.end !== undefined && word.end > row.end)
+          || (cues.length && word.start < cues[cues.length - 1].start)) return null;
+        cues.push({ text: word.text, start: word.start, end: word.end });
+      }
+      if (cues.length && cues.map(word => word.text).join("").trim() !== row.text.trim()) return null;
+      if (cues.length) row.words = cues;
+    }
+    lines.push(row);
+  }
+  return { id: 0, source: "ttml", instrumental: false, plainLyrics: data.plainLyrics, syncedLyrics: null, timedLines: lines };
+}
+
+const localPending = new Map<string, Promise<Lyrics | null>>();
+export function getLyrics(track: Track, source?: LyricsSource): Promise<Lyrics | null> {
+  if (!source || !track.id) return getServiceLyrics(track);
+  const key = JSON.stringify([source.key, track.id, track.title, track.artist, track.album, track.duration]);
+  const existing = localPending.get(key);
+  if (existing) return existing;
+  const request = (async () => {
+    try {
+      const lyrics = localLyrics(await source.load(track.id));
+      if (lyrics) return lyrics;
+    } catch { /* An older/unavailable server or invalid sidecar can use the service fallback. */ }
+    return getServiceLyrics(track);
+  })();
+  localPending.set(key, request);
+  void request.then(() => localPending.delete(key), () => localPending.delete(key));
+  return request;
 }
 
 const CACHE_KEY = "spatial-lyrics:v2";
@@ -128,17 +187,9 @@ function backoff(header: string | null, fallback: number) {
   try { localStorage.setItem(BACKOFF_KEY, String(retryAfter)); } catch { /* Retain in memory. */ }
 }
 
-export function lyricsTitle(title: string): string {
-  const credit = "(?:spatial\\s+mix|mixed\\s+by\\s+tesla)";
-  if (!new RegExp(`\\b${credit}\\b`, "i").test(title)) return title.trim();
-  return title.replace(new RegExp(`\\(\\s*${credit}\\s*\\)|\\[\\s*${credit}\\s*\\]`, "gi"), "")
-    .replace(new RegExp(`\\b${credit}\\b`, "gi"), "")
-    .replace(/\s+/g, " ").replace(/^[\s\-–—|:]+|[\s\-–—|:]+$/g, "").trim();
-}
-
-export function getLyrics(track: Track): Promise<Lyrics | null> {
+function getServiceLyrics(track: Track): Promise<Lyrics | null> {
   const duration = Math.round(track.duration);
-  const title = lyricsTitle(track.title);
+  const title = track.title.trim();
   if (!title || !track.artist.trim() || !Number.isFinite(duration) || duration < 1 || duration > 3600)
     return Promise.reject(new Error("Lyrics lookup needs an artist, title and a duration between 1 second and 1 hour."));
   const key = JSON.stringify([title, track.artist.trim(), track.album.trim(), duration]);

@@ -14,9 +14,11 @@ export async function call<T>(command: string, args: Record<string, unknown> = {
     if (!/^http:\/\/(127\.0\.0\.1|localhost):8787$/.test(address)) throw new Error("Browser preview connects to the local development server on port 8787");
     previewToken = String(args.token);
   }
-  if (command === "connect_server" || command === "get_library" || command === "get_artwork") {
-    const path = command === "get_artwork" ? `artwork/${encodeURIComponent(String(args.id))}` : "library";
+  if (command === "connect_server" || command === "get_library" || command === "get_artwork" || command === "get_track_lyrics") {
+    const path = command === "get_artwork" ? `artwork/${encodeURIComponent(String(args.id))}`
+      : command === "get_track_lyrics" ? `tracks/${encodeURIComponent(String(args.id))}/lyrics` : "library";
     const response = await fetch(`/preview/api/${path}`, { headers: { Authorization: `Bearer ${previewToken}` } });
+    if (command === "get_track_lyrics" && response.status === 404) return null as T;
     if (!response.ok) throw new Error(response.status === 401 ? "The server token is incorrect" : "Cannot reach the local Spatial server");
     if (command === "get_artwork") return await new Promise<string>((resolve, reject) => {
       response.blob().then(blob => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(blob); }).catch(reject);

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod db;
 pub mod http;
+pub mod lyrics;
 pub mod scanner;
 
 use anyhow::Result;
