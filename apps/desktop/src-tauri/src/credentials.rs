@@ -160,51 +160,38 @@ mod platform {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(target_os = "linux")]
 mod platform {
     use super::SavedConnection;
-
-    #[cfg(target_os = "linux")]
-    const BACKEND: &str = "desktop keyring";
-    #[cfg(target_os = "macos")]
-    const BACKEND: &str = "macOS Keychain";
-
     static ACCESS: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     fn entry(target: &str) -> Result<keyring::Entry, String> {
         keyring::Entry::new(target, "connection")
-            .map_err(|_| "Cannot open Spatial's saved connection entry.".into())
+            .map_err(|_| "Cannot open Spatial's desktop keyring entry.".into())
     }
     pub fn load(target: &str) -> Result<Option<SavedConnection>, String> {
         let _access = ACCESS
             .lock()
-            .map_err(|_| "Cannot access the saved connection store")?;
+            .map_err(|_| "Cannot access the desktop keyring")?;
         match entry(target)?.get_secret() {
             Ok(bytes) => serde_json::from_slice(&bytes).map(Some)
                 .map_err(|_| "The saved connection cannot be read. Enter your access token again.".into()),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(_) => Err(if cfg!(target_os = "macos") {
-                format!("Cannot read the {BACKEND}. Allow Spatial access when prompted.")
-            } else {
-                format!("Cannot read the {BACKEND}. Start and unlock a Secret Service provider such as GNOME Keyring.")
-            }),
+            Err(_) => Err("Cannot read the desktop keyring. Start and unlock a Secret Service provider such as GNOME Keyring.".into()),
         }
     }
     pub fn save(target: &str, connection: &SavedConnection) -> Result<(), String> {
         let _access = ACCESS
             .lock()
-            .map_err(|_| "Cannot access the saved connection store")?;
+            .map_err(|_| "Cannot access the desktop keyring")?;
         let bytes =
             serde_json::to_vec(connection).map_err(|_| "Cannot encode the saved connection")?;
         entry(target)?.set_secret(&bytes).map_err(|_| {
-            if cfg!(target_os = "macos") {
-                format!("Cannot save the connection to the {BACKEND}. Allow Spatial access when prompted.")
-            } else {
-                format!("Cannot save the connection to the {BACKEND}. Start and unlock your desktop keyring, then try again.")
-            }
+            "Cannot save the connection. Start and unlock your desktop keyring, then try again."
+                .into()
         })
     }
-    #[cfg(all(test, target_os = "linux"))]
+    #[cfg(test)]
     mod tests {
         use super::*;
         #[test]
@@ -233,13 +220,13 @@ mod platform {
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(windows, target_os = "linux")))]
 mod platform {
     use super::SavedConnection;
     pub fn load(_: &str) -> Result<Option<SavedConnection>, String> {
         Ok(None)
     }
     pub fn save(_: &str, _: &SavedConnection) -> Result<(), String> {
-        Err("Saved connections are supported on Windows, Linux and macOS.".into())
+        Err("Saved connections are supported on Windows and Linux.".into())
     }
 }
