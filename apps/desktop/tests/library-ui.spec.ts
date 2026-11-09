@@ -55,6 +55,23 @@ test("favorites only show populated sections and keep album/track toolbars", asy
   await expect(page.getByText("Favorite songs", { exact: true })).toHaveCount(0);
 });
 
+test("now-playing cover and artist open the album and artist profile", async ({ page }) => {
+  await page.getByRole("button", { name: "Open album Night Letters", exact: true }).click();
+  await page.getByRole("button", { name: "Play A quiet room", exact: true }).click();
+  await page.waitForTimeout(400);
+  await page.locator(".sidebar nav .nav-item").filter({ hasText: "Songs" }).click();
+  await page.locator(".now-playing-cover").click();
+  await expect(page.locator(".album-hero h1")).toHaveText("Night Letters");
+  await page.getByRole("button", { name: "Open artist Spatial", exact: true }).click();
+  await expect(page.locator(".artist-hero h1")).toHaveText("Spatial");
+  await expect(page.locator(".artist-albums .album-card")).toHaveCount(2);
+  await page.getByRole("button", { name: "Open settings", exact: true }).click();
+  await page.locator(".now-playing-cover").click();
+  await expect(page.locator(".album-hero h1")).toHaveText("Night Letters");
+  await page.getByRole("button", { name: "Open artist Spatial", exact: true }).click();
+  await expect(page.locator(".artist-hero h1")).toHaveText("Spatial");
+});
+
 test("external links open through the native link command instead of navigating the webview", async ({ page }) => {
   const opened: string[] = [];
   page.on("console", message => { if (message.text().startsWith("Fixture external link ")) opened.push(message.text().replace("Fixture external link ", "")); });

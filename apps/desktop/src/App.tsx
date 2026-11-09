@@ -481,7 +481,10 @@ function AppContent({ preferences, onChangePreferences }: {
     || catalog?.albums.find(album => album.artwork_id)?.artwork_id;
   const theme = useArtworkTheme(catalog && preferences.artworkColors ? themeArtwork : null);
 
-  function openAlbum(album: Album) { setSelectedAlbum(album); setSearch(""); }
+  function openAlbum(album: Album) {
+    if (view === "settings") setView("albums");
+    setSelectedAlbum(album); setSearch("");
+  }
   function playAlbum(album: Album) {
     const tracks = catalog?.tracks.filter(track => track.album_id === album.id) || [];
     playQueue(tracks, 0);
@@ -764,10 +767,17 @@ function AppContent({ preferences, onChangePreferences }: {
       track={lyricsTrack} sourceKey={`${address}:${catalog.revision}`} position={status.track_id === lyricsTrack?.id ? status.position : 0}
       playing={status.track_id === lyricsTrack?.id && status.active} paused={status.paused} onSeek={commitSeek}
       backdrop={preferences.lyricsBackdrop} follow={preferences.lyricsFollow} /></LyricsSlot>}</AnimatePresence>
-    <footer className="player-bar" inert={listening.open}><div className="now-playing">{current ? <Cover id={current.artwork_id} title={current.title} /> : <div className="idle-cover"><Headphones size={24} /></div>}
+    <footer className="player-bar" inert={listening.open}><div className="now-playing">{current
+      ? <button type="button" className="now-playing-cover" aria-label={`Open album ${current.album}`} title={`Open ${current.album}`}
+        onClick={() => { const album = catalog.albums.find(entry => entry.id === current.album_id); if (album) openAlbum(album); }}>
+        <Cover id={current.artwork_id} title={current.title} />
+      </button>
+      : <div className="idle-cover"><Headphones size={24} /></div>}
       <AnimatePresence initial={false} mode="wait"><motion.div className="now-playing-label" key={current?.id || "idle"}
         initial={{ opacity: 0, y: reduced ? 0 : 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: reduced ? 0 : -3 }} transition={{ duration: reduced ? 0 : .16, ease }}>
-        <strong>{current?.title || "Find your next dimension"}</strong><span>{current?.artist || "Choose an album to start listening"}</span>
+        <strong>{current?.title || "Find your next dimension"}</strong>
+        {current ? <button type="button" className="now-playing-artist" aria-label={`Open artist ${current.artist}`} title={`Open ${current.artist}`}
+          onClick={() => openArtist(current.artist)}>{current.artist}</button> : <span>Choose an album to start listening</span>}
       </motion.div></AnimatePresence><FavoriteButton active={!!current && favorites.tracks.includes(current.id)} label={current ? `track ${current.title}` : "current track"} disabled={!current} onClick={() => { if (current) toggleFavorite("tracks", current.id); }} /></div>
       <div className="transport"><PlaybackControls {...playbackControls} /><PlaybackProgress {...playbackProgress} /></div>
       <div className="player-details">

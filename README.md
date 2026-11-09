@@ -16,7 +16,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 - **A tabbed Settings page.** Playback, appearance, lyrics, integrations and controls now live on one page instead of a dialog.
 - **Stereo playback for headphones.** Decode any supported track to stereo PCM, with optional exclusive mode and software volume, while keeping the original Dolby bitstream path for a receiver.
 - **Apple Music-inspired lyrics.** A brighter active line, artwork-colored backdrop and smoother word highlighting in the side panel and fullscreen player.
-- **A cleaner shell.** Search moved into the sidebar, refreshed album and artist browsing, and a new player bar.
+- **A cleaner shell.** Search moved into the sidebar, refreshed album and artist browsing, and a new player bar. Click the now-playing cover or artist to jump straight back to that album or artist.
 
 See the [settings guide](docs/settings.md) for the new controls.
 
