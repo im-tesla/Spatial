@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spatial — Music with room to move</title>
+  <meta name="description" content="A native desktop player for the music on your server. Original Dolby Atmos over HDMI, every artist and album, and lyrics that keep up.">
+  <meta name="theme-color" content="#10130e">
+  <link rel="canonical" href="https://im-tesla.github.io/Spatial/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Spatial — Music with room to move">
+  <meta property="og:description" content="A native desktop player for the music on your server. Dolby Atmos over HDMI, artists, albums and lyrics that keep up.">
+  <meta property="og:url" content="https://im-tesla.github.io/Spatial/">
+  <meta property="og:image" content="https://im-tesla.github.io/Spatial/screenshots/readme-library.jpg">
+  <meta property="og:image:alt" content="The Spatial desktop player showing an album library tinted by artwork">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://im-tesla.github.io/Spatial/screenshots/readme-library.jpg">
+  <link rel="icon" href="site/favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="site/apple-touch-icon.png">
+  <link rel="preload" href="site/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="site/site.css">
+  <script src="site/site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="scroll-progress" aria-hidden="true"><span></span></div>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="#top" aria-label="Spatial home">spatial<span>.</span></a>
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="#collection">Collection</a>
+      <a href="#artists">Artists</a>
+      <a href="#lyrics">Lyrics</a>
+      <a href="#sound">Sound</a>
+    </nav>
+    <div class="header-actions">
+      <a class="header-github" href="https://github.com/im-tesla/Spatial" aria-label="Spatial on GitHub">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .8a11.4 11.4 0 0 0-3.6 22.2c.6.1.8-.2.8-.5v-2.2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.8.1-.8.1-.8 1.2.1 1.9 1.3 1.9 1.3 1.1 1.9 2.9 1.4 3.6 1.1.1-.8.4-1.4.8-1.7-2.7-.3-5.5-1.4-5.5-6a4.7 4.7 0 0 1 1.2-3.2 4.4 4.4 0 0 1 .1-3.2s1-.3 3.3 1.2a11 11 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.3 2.8.1 3.2a4.7 4.7 0 0 1 1.2 3.2c0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.4 11.4 0 0 0 12 .8Z"/></svg>
+      </a>
+      <a class="button button-small" data-download="primary" href="https://github.com/im-tesla/Spatial/releases/latest"><span data-download-label>Download</span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0 4-4m-4 4-4-4M4 16h12"/></svg>
+      </a>
+    </div>
+  </header>
+
+  <main id="main" tabindex="-1">
+    <section class="hero" id="top">
+      <div class="hero-ambient" aria-hidden="true">
+        <span class="orb orb-a"></span>
+        <span class="orb orb-b"></span>
+        <span class="orbit orbit-a"></span>
+        <span class="orbit orbit-b"></span>
+        <span class="orbit orbit-c"></span>
+        <span class="hero-grid"></span>
+      </div>
+
+      <div class="hero-copy">
+        <p class="release-pill"><span class="live-dot"></span><span data-release-version>v0.1.16</span><span class="pill-sep">·</span>Windows &amp; Linux</p>
+        <h1>Music with<br><span>room to move.</span></h1>
+        <p class="lede">Spatial turns the music on your server into a native listening room. Dolby Atmos on the receiver. Every artist, album and lyric in reach.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" data-download="primary" href="https://github.com/im-tesla/Spatial/releases/latest">
+            <span data-download-label>Download latest</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0 4-4m-4 4-4-4M4 16h12"/></svg>
+          </a>
+          <a class="button button-ghost" href="#collection">See the room
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10h13m0 0-5-5m5 5-5 5"/></svg>
+          </a>
+        </div>
+        <p class="hero-note">Windows x64 installer · Linux AppImage and Debian package · Free and open source</p>
+      </div>
+
+      <div class="hero-stage">
+        <figure class="window hero-window">
+          <div class="window-top"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">spatial<span>.</span></span><span class="window-tag">Dolby Atmos</span></div>
+          <img src="screenshots/readme-library.jpg" width="1440" height="900" alt="Spatial library showing album covers tinted by artwork, sidebar navigation and player bar" fetchpriority="high">
+        </figure>
+
+        <aside class="now-card" aria-label="Now playing lyrics preview">
+          <div class="now-head">
+            <span class="now-art" aria-hidden="true"></span>
+            <div class="now-meta"><span>Now playing</span><strong>A quiet room</strong><small>Spatial · Night Letters</small></div>
+            <span class="now-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+          </div>
+          <div class="now-lines" data-demo-lyrics>
+            <p class="is-active" data-time="4">A quiet room</p>
+            <p data-time="8">The lights turn green</p>
+            <p data-time="12">A little space to breathe</p>
+            <p data-time="16">Every note comes home</p>
+          </div>
+          <div class="now-progress" aria-hidden="true"><span></span></div>
+          <div class="now-foot"><span>Word-synced lyrics</span><span data-demo-time>0:04 / 0:20</span></div>
+        </aside>
+      </div>
+
+      <a class="scroll-cue" href="#collection"><span>Scroll to listen</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 4v12m0 0 4-4m-4 4-4-4"/></svg></a>
+    </section>
+
+    <section class="section collection" id="collection">
+      <div class="section-head">
+        <h2>Your collection,<br>in colour.</h2>
+        <p>Artwork sets the palette, tags keep the order and a live catalog follows the files on your server. Search lives in the sidebar, ready when you are.</p>
+      </div>
+
+      <figure class="window collection-window" data-reveal="shot">
+        <div class="window-top"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">Night Letters · Spatial</span><span class="window-tag">2026</span></div>
+        <img src="screenshots/readme-album.jpg" width="1440" height="900" alt="Spatial album page with artwork, release details and the track list" loading="lazy" decoding="async">
+      </figure>
+
+      <div class="feature-row">
+        <div class="feature" data-reveal>
+          <h3>Live catalog</h3>
+          <p>Filesystem changes reach the player without a refresh. Add an album, edit a tag and watch the library follow.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <h3>Artwork sets the palette</h3>
+          <p>The interface takes its colours from what is playing, with smooth transitions when the record changes.</p>
+        </div>
+        <div class="feature" data-reveal>
+          <h3>Search, without leaving</h3>
+          <p>Filter the collection in place, or press Ctrl&nbsp;K from anywhere in the library.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section artists" id="artists">
+      <div class="artists-copy">
+        <h2>Every artist gets a room of their own.</h2>
+        <p>Spatial builds artist pages from your tags and finds portraits from Deezer, cached on your server. Open any artist for their full discography, the albums they appear on, and a play or shuffle for all of it.</p>
+        <ul class="tags" aria-label="Artist features">
+          <li>Artist portraits</li>
+          <li>Full discography</li>
+          <li>Appears on</li>
+          <li>Play &amp; shuffle</li>
+        </ul>
+      </div>
+      <div class="artist-stack" data-reveal>
+        <figure class="shot artists-shot">
+          <img src="screenshots/readme-artists.jpg" width="1440" height="900" alt="Spatial artists grid with circular artist portraits" loading="lazy" decoding="async">
+        </figure>
+        <figure class="shot artist-shot">
+          <img src="screenshots/readme-artist.jpg" width="1440" height="900" alt="Spatial artist page showing a portrait, album count and discography" loading="lazy" decoding="async">
+        </figure>
+      </div>
+    </section>
+
+    <section class="section lyrics" id="lyrics">
+      <div class="lyrics-copy">
+        <h2>The words keep up.</h2>
+        <p>A bright active line, a wash of album art and word-by-word timing. Local TTML lyrics come first; LRCLIB fills the gaps. When a recording runs early or late, shift the whole song by up to ten seconds.</p>
+        <ul class="tags" aria-label="Lyrics features">
+          <li>Word-synced</li>
+          <li>Local lyrics first</li>
+          <li>Apple Music-inspired</li>
+          <li>±10s sync offset</li>
+        </ul>
+      </div>
+      <div class="lyrics-shots">
+        <figure class="shot lyrics-shot-main" data-reveal="shot">
+          <img src="screenshots/beautiful-lyrics-sidebar.jpg" width="1440" height="900" alt="Spatial queue beside the lyrics panel with a bright active line and dimmed surrounding lines" loading="lazy" decoding="async">
+        </figure>
+        <figure class="shot lyrics-shot-full" data-reveal="shot">
+          <img src="screenshots/fullscreen-listening.jpg" width="1440" height="900" alt="Spatial fullscreen player with album artwork and large synced lyrics" loading="lazy" decoding="async">
+        </figure>
+        <span class="lyrics-glow" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <section class="section sound" id="sound">
+      <div class="sound-head">
+        <h2>Built for the room.<br>Ready for headphones.</h2>
+        <p>The default path keeps Dolby Atmos untouched and lets the receiver decode it. Stereo playback decodes locally for headphones, with exclusive mode and software volume when you want them.</p>
+      </div>
+
+      <div class="signal" aria-label="Audio path: library to server to player to receiver or headphones">
+        <div class="signal-node"><span class="node-dot"></span><strong>Library</strong><small>Your files</small></div>
+        <span class="signal-line" aria-hidden="true"></span>
+        <div class="signal-node"><span class="node-dot"></span><strong>Server</strong><small>Rust + Axum</small></div>
+        <span class="signal-line" aria-hidden="true"></span>
+        <div class="signal-node"><span class="node-dot"></span><strong>Player</strong><small>Native mpv</small></div>
+        <span class="signal-line" aria-hidden="true"></span>
+        <div class="signal-node signal-end"><span class="node-dot"></span><strong>Receiver</strong><small>or headphones</small></div>
+      </div>
+
+      <div class="modes">
+        <article class="mode" data-reveal>
+          <span class="mode-tag">Default</span>
+          <h3>Dolby Atmos bitstream</h3>
+          <p>E-AC-3 and TrueHD leave the player untouched over HDMI. The receiver decodes the object audio and controls the volume.</p>
+        </article>
+        <article class="mode" data-reveal>
+          <span class="mode-tag">Headphones</span>
+          <h3>Stereo PCM</h3>
+          <p>Decode any supported format to two channels. Choose exclusive or shared output, and set the volume in the app.</p>
+        </article>
+      </div>
+
+      <figure class="window settings-window" data-reveal="shot">
+        <div class="window-top"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="window-title">Settings · Playback</span><span class="window-tag">Exclusive</span></div>
+        <img src="screenshots/readme-settings.jpg" width="1440" height="900" alt="Spatial Settings page with audio output, stereo playback, exclusive mode and volume controls" loading="lazy" decoding="async">
+      </figure>
+    </section>
+
+    <section class="section gallery" aria-labelledby="gallery-title">
+      <div class="gallery-head">
+        <h2 id="gallery-title">The room, from every angle.</h2>
+        <a class="text-link" href="https://github.com/im-tesla/Spatial/tree/main/docs/screenshots">All screenshots
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h12m0 0-4-4m4 4-4 4"/></svg>
+        </a>
+      </div>
+      <div class="gallery-scroll" tabindex="0" role="region" aria-label="Screenshot gallery">
+        <figure class="gallery-item" data-reveal>
+          <img src="screenshots/settings-lyrics.jpg" width="1440" height="900" alt="Lyrics settings with text size, sync offset and artwork backdrop" loading="lazy" decoding="async">
+          <figcaption>Lyrics, tuned</figcaption>
+        </figure>
+        <figure class="gallery-item" data-reveal>
+          <img src="screenshots/favorites-sharing.png" width="1440" height="900" alt="Favorites page in selection mode with sharing actions" loading="lazy" decoding="async">
+          <figcaption>Favorites you can share</figcaption>
+        </figure>
+        <figure class="gallery-item" data-reveal>
+          <img src="screenshots/readme-library.jpg" width="1440" height="900" alt="Spatial album library with artwork-based colours" loading="lazy" decoding="async">
+          <figcaption>Every record in reach</figcaption>
+        </figure>
+        <figure class="gallery-item gallery-phone" data-reveal>
+          <img src="screenshots/phone-remote.jpg" width="560" height="900" alt="Spatial phone remote open on a phone" loading="lazy" decoding="async">
+          <figcaption>Your phone as the remote</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="download" id="download">
+      <div class="download-inner">
+        <div class="download-copy">
+          <p class="release-pill"><span class="live-dot"></span>Latest release <span data-release-version>v0.1.16</span></p>
+          <h2>Take the room<br>with you.</h2>
+          <p>Spatial is free and open source. Download a signed desktop release, or build it from source.</p>
+        </div>
+        <div class="download-actions">
+          <a class="download-primary" data-download="primary" href="https://github.com/im-tesla/Spatial/releases/latest">
+            <span class="download-platform"><span data-download-label>Download latest</span><small data-primary-detail>Windows installer</small></span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3v10m0 0 4-4m-4 4-4-4M4 16h12"/></svg>
+          </a>
+          <div class="download-grid">
+            <a class="download-card" data-download="windows" href="https://github.com/im-tesla/Spatial/releases/latest"><span>Windows</span><strong>NSIS installer</strong><small>x64</small></a>
+            <a class="download-card" data-download="appimage" href="https://github.com/im-tesla/Spatial/releases/latest"><span>Linux</span><strong>AppImage</strong><small>x64</small></a>
+            <a class="download-card" data-download="deb" href="https://github.com/im-tesla/Spatial/releases/latest"><span>Debian / Ubuntu</span><strong>.deb package</strong><small>amd64</small></a>
+            <a class="download-card" data-download="all" href="https://github.com/im-tesla/Spatial/releases"><span>All releases</span><strong>Version history</strong><small>GitHub</small></a>
+          </div>
+          <p class="download-note">The desktop app needs a Spatial server pointed at your music library. <a href="https://github.com/im-tesla/Spatial/blob/main/docs/server.md">Set up the server</a>.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="footer-top">
+      <a class="brand" href="#top">spatial<span>.</span></a>
+      <p>Dolby Atmos music, with room to move.</p>
+      <div class="footer-links">
+        <a href="https://github.com/im-tesla/Spatial">GitHub</a>
+        <a href="https://github.com/im-tesla/Spatial/releases">Releases</a>
+        <a href="https://github.com/im-tesla/Spatial/tree/main/docs">Docs</a>
+        <a href="https://github.com/im-tesla/Spatial/issues">Issues</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span><a href="https://github.com/im-tesla/Spatial/blob/main/LICENSE">MIT licensed</a> · Made for the room.</span>
+      <span>Built with Rust, Tauri, React and Motion · Demo artwork and fictional releases</span>
+    </div>
+  </footer>
+</body>
+</html>

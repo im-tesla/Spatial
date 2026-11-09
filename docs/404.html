@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Not found — Spatial</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="site/favicon-32.png" type="image/png">
+  <link rel="preload" href="site/fonts/InterVariable.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="site/site.css">
+  <style>
+    .not-found { width: var(--page); min-height: 100svh; margin: 0 auto; display: flex; flex-direction: column; justify-content: center; padding: 140px 0 80px; }
+    .not-found h1 { font-size: clamp(48px, 9vw, 112px); line-height: .92; letter-spacing: -.06em; font-weight: 560; margin: 22px 0 18px; }
+    .not-found p { color: var(--muted); max-width: 45ch; }
+    .not-found .button { margin-top: 30px; align-self: flex-start; }
+    .not-found .brand { position: fixed; top: 26px; left: var(--gutter); }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <a class="brand" href="./">spatial<span>.</span></a>
+  <main class="not-found" id="main">
+    <span class="release-pill"><span class="live-dot"></span>404 · Nothing playing here</span>
+    <h1>This room<br>is empty.</h1>
+    <p>The page you followed does not exist. The music is still one click away.</p>
+    <a class="button button-primary" href="./">Back to Spatial
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 10h13m0 0-5-5m5 5-5 5"/></svg>
+    </a>
+  </main>
+</body>
+</html>

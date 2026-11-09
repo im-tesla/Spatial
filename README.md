@@ -8,7 +8,7 @@ The server discovers albums from file metadata and keeps connected clients up to
 
 ![Spatial album library with artwork-based colors](docs/screenshots/readme-library.jpg)
 
-**[Get started](#get-started)** · **[Screenshots](#a-closer-look)** · **[Playback](#playback)**
+**[Website](https://im-tesla.github.io/Spatial/)** · **[Get started](#get-started)** · **[Screenshots](#a-closer-look)** · **[Playback](#playback)**
 
 ## New in 0.1.17
 
