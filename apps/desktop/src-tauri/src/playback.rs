@@ -320,9 +320,12 @@ impl Player {
             #[cfg(any(target_os = "linux", target_os = "macos"))]
             let pipe = {
                 use std::os::unix::fs::PermissionsExt;
+                // Keep the Unix socket path short. macOS's default TMPDIR
+                // (/var/folders/...) plus the UUID exceeds the 104-byte
+                // sockaddr_un limit, so mpv would never create the socket.
                 let directory = tempfile::Builder::new()
                     .prefix(&format!("spatial-ipc-{owner_id}-"))
-                    .tempdir()
+                    .tempdir_in("/tmp")
                     .map_err(|_| "Cannot create the playback connection directory")?;
                 std::fs::set_permissions(directory.path(), std::fs::Permissions::from_mode(0o700))
                     .map_err(|_| "Cannot protect the playback connection directory")?;
