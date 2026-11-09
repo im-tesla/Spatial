@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
     time::{Duration, Instant},
 };
-#[cfg(any(windows, target_os = "linux"))]
+#[cfg(any(windows, target_os = "linux", target_os = "macos"))]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 #[cfg(windows)]
 use tokio::net::windows::named_pipe::{ClientOptions, NamedPipeClient};
@@ -13,7 +13,7 @@ use tokio::process::{Child, Command};
 mod ownership;
 #[cfg(windows)]
 type IpcStream = NamedPipeClient;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 type IpcStream = tokio::net::UnixStream;
 
 fn output_driver() -> &'static str {
@@ -21,6 +21,8 @@ fn output_driver() -> &'static str {
         "wasapi"
     } else if cfg!(target_os = "linux") {
         "alsa"
+    } else if cfg!(target_os = "macos") {
+        "coreaudio"
     } else {
         "unsupported"
     }
@@ -71,6 +73,11 @@ fn valid_device(device: &str, allow_stereo: bool) -> bool {
         }
         return device.starts_with("alsa/hdmi:") && device.len() > 10;
     }
+    if cfg!(target_os = "macos") {
+        // CoreAudio exposes both the system mixer and direct hardware devices.
+        // The user chooses the HDMI output to the receiver in Settings.
+        return device.starts_with("coreaudio/") && device.len() > 10;
+    }
     false
 }
 
@@ -78,7 +85,7 @@ fn valid_device(device: &str, allow_stereo: bool) -> bool {
 async fn open_ipc(endpoint: &str) -> std::io::Result<IpcStream> {
     ClientOptions::new().open(endpoint)
 }
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 async fn open_ipc(endpoint: &str) -> std::io::Result<IpcStream> {
     tokio::net::UnixStream::connect(endpoint).await
 }
@@ -110,9 +117,9 @@ pub struct Player {
     child: Option<Child>,
     ownership: Option<ownership::Lease>,
     registry_directory: Option<PathBuf>,
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     connection: Option<BufReader<IpcStream>>,
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     ipc_directory: Option<tempfile::TempDir>,
     request_id: u64,
     pub status: PlaybackStatus,
@@ -147,8 +154,29 @@ pub fn executable() -> Result<PathBuf, String> {
         }
         Err("Install mpv with your distribution's package manager to enable HDMI playback.".into())
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
-    Err("Playback is supported on Windows and Linux.".into())
+    #[cfg(target_os = "macos")]
+    {
+        let installed = std::env::current_exe()
+            .map_err(|e| e.to_string())?
+            .parent()
+            .map(|directory| directory.join("mpv"));
+        if let Some(path) = installed.filter(|path| path.is_file()) {
+            return Ok(path);
+        }
+        for path in ["/opt/homebrew/bin/mpv", "/usr/local/bin/mpv"] {
+            if std::path::Path::new(path).is_file() {
+                return Ok(PathBuf::from(path));
+            }
+        }
+        let development = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("binaries/mpv-aarch64-apple-darwin");
+        if development.is_file() {
+            return Ok(development);
+        }
+        Err("Playback engine is missing. Install mpv with Homebrew: brew install mpv.".into())
+    }
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    Err("Playback is supported on Windows, Linux and macOS.".into())
 }
 
 fn command() -> Result<Command, String> {
@@ -219,11 +247,11 @@ impl Player {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
-        #[cfg(any(windows, target_os = "linux"))]
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
             self.connection = None;
         }
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             self.ipc_directory = None;
         }
@@ -268,7 +296,7 @@ impl Player {
             .clone()
             .ok_or("Cannot initialize playback ownership")?;
         cleanup_orphans(registry.clone()).await?;
-        #[cfg(any(windows, target_os = "linux"))]
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         let mut launch = command()?;
         self.volume = volume;
         self.status = PlaybackStatus {
@@ -284,12 +312,12 @@ impl Player {
             ..Default::default()
         };
         self.started = Some(Instant::now());
-        #[cfg(any(windows, target_os = "linux"))]
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         {
             let owner_id = uuid::Uuid::new_v4();
             #[cfg(windows)]
             let pipe = format!(r"\\.\pipe\spatial-{owner_id}");
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             let pipe = {
                 use std::os::unix::fs::PermissionsExt;
                 let directory = tempfile::Builder::new()
@@ -393,15 +421,15 @@ impl Player {
             }
             Ok(())
         }
-        #[cfg(not(any(windows, target_os = "linux")))]
+        #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
         {
             let _ = (url, exclusive);
             self.stop().await;
-            Err("Spatial playback supports Windows and Linux".into())
+            Err("Spatial playback supports Windows, Linux and macOS".into())
         }
     }
 
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     async fn request(&mut self, command: Value) -> Result<Value, String> {
         self.request_id += 1;
         let id = self.request_id;
@@ -445,7 +473,7 @@ impl Player {
         }).await.map_err(|_| "Playback engine response timed out".to_string())?
     }
 
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     async fn request(&mut self, _: Value) -> Result<Value, String> {
         Err("Native desktop playback required".into())
     }
@@ -470,7 +498,7 @@ impl Player {
         let volume = volume.clamp(0.0, 100.0);
         self.volume = volume;
         self.status.volume = volume;
-        #[cfg(any(windows, target_os = "linux"))]
+        #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
         if self.connection.is_some() {
             self.request(json!(["set_property", "volume", volume]))
                 .await

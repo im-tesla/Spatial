@@ -5,7 +5,10 @@ use tokio::process::Child;
 #[derive(Serialize, Deserialize)]
 pub(super) struct Identity {
     pub(super) pid: u32,
+    #[cfg(not(target_os = "macos"))]
     pub(super) started: u64,
+    #[cfg(target_os = "macos")]
+    pub(super) started: String,
     #[cfg(target_os = "linux")]
     #[serde(default)]
     boot_id: String,
@@ -172,7 +175,70 @@ mod platform {
     }
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+mod platform {
+    use super::*;
+    use std::process::Command;
+
+    fn started(pid: u32) -> io::Result<String> {
+        let output = Command::new("/bin/ps")
+            .args(["-o", "lstart=", "-p", &pid.to_string()])
+            .output()?;
+        if !output.status.success() {
+            return Err(io::Error::other("Player process is no longer running"));
+        }
+        let value = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+        if value.is_empty() {
+            return Err(io::Error::other("Player identity unavailable"));
+        }
+        Ok(value)
+    }
+
+    impl Identity {
+        pub(crate) fn capture(child: &Child) -> io::Result<Self> {
+            let pid = child
+                .id()
+                .ok_or_else(|| io::Error::other("Player already exited"))?;
+            Ok(Self {
+                pid,
+                started: started(pid)?,
+            })
+        }
+
+        pub(crate) fn terminate_if_same(&self) -> io::Result<()> {
+            let current = match started(self.pid) {
+                Ok(value) => value,
+                Err(_) => return Ok(()),
+            };
+            if current != self.started {
+                return Ok(());
+            }
+            if unsafe { libc::kill(self.pid as i32, libc::SIGKILL) } != 0 {
+                let error = io::Error::last_os_error();
+                return if error.raw_os_error() == Some(libc::ESRCH) {
+                    Ok(())
+                } else {
+                    Err(error)
+                };
+            }
+            for _ in 0..60 {
+                if unsafe { libc::kill(self.pid as i32, 0) } != 0 {
+                    let error = io::Error::last_os_error();
+                    if error.raw_os_error() == Some(libc::ESRCH) {
+                        return Ok(());
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Previous player did not exit",
+            ))
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 impl Identity {
     pub(crate) fn capture(_: &Child) -> io::Result<Self> {
         Err(io::Error::other("Unsupported playback platform"))

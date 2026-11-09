@@ -23,7 +23,7 @@ pub(super) struct Lease {
 
 pub(super) fn initialize(directory: &Path) -> Result<(), String> {
     std::fs::create_dir_all(directory).map_err(|e| e.to_string())?;
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         use std::os::unix::fs::PermissionsExt;
         std::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))
@@ -91,7 +91,7 @@ fn valid_endpoint(id: Uuid, endpoint: &str) -> bool {
     {
         endpoint == format!(r"\\.\pipe\spatial-{id}")
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         let path = Path::new(endpoint);
         path.is_absolute()
@@ -101,7 +101,7 @@ fn valid_endpoint(id: Uuid, endpoint: &str) -> bool {
                     .starts_with(&format!("spatial-ipc-{id}-"))
             })
     }
-    #[cfg(not(any(windows, target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
     {
         let _ = (id, endpoint);
         false
@@ -111,7 +111,7 @@ fn valid_endpoint(id: Uuid, endpoint: &str) -> bool {
 async fn quit_unrecorded_child(endpoint: &str) -> Result<bool, String> {
     // Covers a crash between spawning mpv and recording its PID. The random IPC
     // endpoint was written while holding the owner lock before the spawn.
-    #[cfg(any(windows, target_os = "linux"))]
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         for _ in 0..20 {
@@ -191,7 +191,7 @@ pub(super) async fn cleanup(directory: PathBuf) -> Result<(), String> {
         drop(file);
         let _ = std::fs::remove_file(&pid_path);
         let _ = std::fs::remove_file(&path);
-        #[cfg(target_os = "linux")]
+        #[cfg(any(target_os = "linux", target_os = "macos"))]
         {
             // Remove only the known socket and empty temporary directory.
             let socket = Path::new(&record.endpoint);
