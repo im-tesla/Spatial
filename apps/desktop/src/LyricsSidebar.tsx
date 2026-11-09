@@ -5,10 +5,10 @@ import BackdropCover from "./BackdropCover";
 import { clampLyricsWidth, defaultLyricsWidth, minLyricsWidth } from "./lyricsLayout";
 import type { Track } from "./types";
 
-export default function LyricsSidebar({ width, maximum, onResize, onClose, track, position, playing, onSeek, paused = false, sourceKey, backdrop = true, follow = true }: {
+export default function LyricsSidebar({ width, maximum, onResize, onClose, track, position, playing, onSeek, paused = false, sourceKey, backdrop = true, follow = true, offset = 0, onOffsetChange }: {
   width: number; maximum: number; onResize: (width: number) => void; onClose: () => void;
   track: Track | null; position: number; playing: boolean; onSeek: (seconds: number) => void; paused?: boolean; sourceKey?: string;
-  backdrop?: boolean; follow?: boolean;
+  backdrop?: boolean; follow?: boolean; offset?: number; onOffsetChange?: (seconds: number) => void;
 }) {
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [resizing, setResizing] = useState(false);
@@ -36,6 +36,6 @@ export default function LyricsSidebar({ width, maximum, onResize, onClose, track
     <div className="lyrics-sidebar-heading"><h2 id="lyrics-title">Lyrics</h2><div>
       <button className="icon-button" aria-label="Close lyrics panel" onClick={onClose}><X size={19} /></button>
     </div></div>
-    <LyricsPanel track={track} position={position} playing={playing} paused={paused} onSeek={onSeek} sourceKey={sourceKey} followByDefault={follow} />
+    <LyricsPanel track={track} position={position} playing={playing} paused={paused} onSeek={onSeek} sourceKey={sourceKey} followByDefault={follow} offset={offset} onOffsetChange={onOffsetChange} />
   </aside>;
 }

@@ -8,6 +8,10 @@ The lyrics panel remains adjustable. Drag its left edge, or focus the resize han
 
 Both views show **Word-synced lyrics** when validated word timestamps are available, or **Line-synced lyrics** for line timing. Untimed text shows **Plain lyrics · timing unavailable**.
 
+### Sync offset
+
+If a recording's lyrics run early or late, use the offset control beside the timing label in the panel or fullscreen player. `−` shifts lyrics earlier, `+` shifts them later, and clicking the value resets it. The same setting is available in **Settings → Lyrics** with a ±10-second range and 0.1-second steps; positive values show lyrics later. It applies to both views, persists on this device, and adjusts line-click seeking so you land at the shifted lyric time.
+
 Spatial first requests local lyrics from the server. Put a UTF-8 TTML file beside the audio with the same stem:
 
 ```text

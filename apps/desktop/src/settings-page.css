@@ -83,6 +83,14 @@
 .volume-setting input::-moz-range-progress { height: 3px; border-radius: 999px; background: var(--accent); }
 .volume-setting input::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--accent); }
 .volume-setting input:disabled { cursor: default; }
+.offset-setting { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; color: var(--muted); }
+.offset-setting input { appearance: none; -webkit-appearance: none; width: 132px; height: 18px; background: transparent; margin: 0; cursor: pointer; }
+.offset-setting input::-webkit-slider-runnable-track { height: 3px; border-radius: 999px; background: linear-gradient(to right, color-mix(in srgb, var(--secondary-text) 22%, transparent) 0 var(--offset-start), var(--accent) var(--offset-start) var(--offset-end), color-mix(in srgb, var(--secondary-text) 22%, transparent) var(--offset-end) 100%); }
+.offset-setting input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 10px; height: 10px; margin-top: -3.5px; border-radius: 50%; border: 0; background: var(--accent); box-shadow: 0 1px 4px #0005; }
+.offset-setting input::-moz-range-track { height: 3px; border-radius: 999px; background: linear-gradient(to right, color-mix(in srgb, var(--secondary-text) 22%, transparent) 0 var(--offset-start), var(--accent) var(--offset-start) var(--offset-end), color-mix(in srgb, var(--secondary-text) 22%, transparent) var(--offset-end) 100%); }
+.offset-setting input::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 50%; background: var(--accent); }
+.offset-setting span { min-width: 44px; text-align: right; color: var(--secondary-text); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.offset-setting .secondary.small { padding: 6px 9px; font-size: 10px; }
 .settings-footnote { display: flex; gap: 8px; align-items: flex-start; color: var(--dim); font-size: 11px; line-height: 1.7; margin: -6px 4px 0; }
 .settings-footnote svg { margin-top: 1px; }
 

@@ -50,6 +50,20 @@ test("line TTML takes precedence over a service word result and does not invent 
   await page.screenshot({ path: "../../target/ttml-sidebar.png" });
 });
 
+test("lyrics sync offset shifts the active line and can be reset from the panel", async ({ page }) => {
+  const sidebar = await playingSidebar(page, "");
+  await expect(sidebar.locator(".lyric-line.current")).toHaveText("The lights turn green");
+  const later = sidebar.getByRole("button", { name: "Shift lyrics later", exact: true });
+  await later.click();
+  await later.click();
+  await expect(sidebar.locator(".lyrics-offset-value")).toHaveText("+0.2s");
+  await expect(sidebar.locator(".lyric-line.current")).toHaveText("A quiet room");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("spatial-preferences:v1")!).lyricsOffset)).toBe(0.2);
+  await sidebar.getByRole("button", { name: "Reset lyrics offset", exact: true }).click();
+  await expect(sidebar.locator(".lyric-line.current")).toHaveText("The lights turn green");
+  await expect(sidebar.locator(".lyrics-offset-value")).toHaveText("0.0s");
+});
+
 for (const reason of ["missing", "invalid", "offline"]) {
   test(`${reason} server lyrics use the existing LRCLIB fallback`, async ({ page }) => {
     const requests: string[] = [];

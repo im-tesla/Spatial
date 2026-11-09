@@ -766,7 +766,8 @@ function AppContent({ preferences, onChangePreferences }: {
     <AnimatePresence initial={false}>{lyricsOpen && !listening.open && <LyricsSlot key="lyrics"><LyricsSidebar width={panelWidth} maximum={maximumLyricsWidth} onResize={resizeLyrics} onClose={closeLyrics}
       track={lyricsTrack} sourceKey={`${address}:${catalog.revision}`} position={status.track_id === lyricsTrack?.id ? status.position : 0}
       playing={status.track_id === lyricsTrack?.id && status.active} paused={status.paused} onSeek={commitSeek}
-      backdrop={preferences.lyricsBackdrop} follow={preferences.lyricsFollow} /></LyricsSlot>}</AnimatePresence>
+      backdrop={preferences.lyricsBackdrop} follow={preferences.lyricsFollow}
+      offset={preferences.lyricsOffset} onOffsetChange={value => onChangePreferences({ lyricsOffset: value })} /></LyricsSlot>}</AnimatePresence>
     <footer className="player-bar" inert={listening.open}><div className="now-playing">{current
       ? <button type="button" className="now-playing-cover" aria-label={`Open album ${current.album}`} title={`Open ${current.album}`}
         onClick={() => { const album = catalog.albums.find(entry => entry.id === current.album_id); if (album) openAlbum(album); }}>
@@ -796,6 +797,7 @@ function AppContent({ preferences, onChangePreferences }: {
       active={status.active && status.track_id === current.id} position={status.track_id === current.id ? status.position : 0}
       controls={playbackControls} progress={playbackProgress} favorite={favorites.tracks.includes(current.id)}
       onFavorite={() => toggleFavorite("tracks", current.id)} onClose={listening.close} onSeek={commitSeek} error={listening.error || error}
-      lyricsFollow={preferences.lyricsFollow} />}</AnimatePresence>
+      lyricsFollow={preferences.lyricsFollow} lyricsOffset={preferences.lyricsOffset}
+      onLyricsOffset={value => onChangePreferences({ lyricsOffset: value })} />}</AnimatePresence>
   </motion.div>;
 }

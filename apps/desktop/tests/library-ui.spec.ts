@@ -55,6 +55,19 @@ test("favorites only show populated sections and keep album/track toolbars", asy
   await expect(page.getByText("Favorite songs", { exact: true })).toHaveCount(0);
 });
 
+test("lyrics offset is adjustable from Settings and persists", async ({ page }) => {
+  await page.getByRole("button", { name: "Open settings", exact: true }).click();
+  await page.getByRole("tab", { name: "Lyrics", exact: true }).click();
+  const slider = page.getByRole("slider", { name: "Lyrics offset", exact: true });
+  await slider.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".offset-setting span")).toHaveText("+0.2s");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("spatial-preferences:v1")!).lyricsOffset)).toBe(0.2);
+  await page.locator(".offset-setting button").click();
+  await expect(page.locator(".offset-setting span")).toHaveText("0.0s");
+});
+
 test("now-playing cover and artist open the album and artist profile", async ({ page }) => {
   await page.getByRole("button", { name: "Open album Night Letters", exact: true }).click();
   await page.getByRole("button", { name: "Play A quiet room", exact: true }).click();

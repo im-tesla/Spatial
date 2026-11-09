@@ -48,6 +48,11 @@
 .lyrics-panel .plain-lyrics { padding-top: 30px; }
 .lyrics-panel .plain-lyrics .lyric-line { color: color-mix(in srgb, var(--text) 68%, transparent); font-weight: 600; }
 .lyrics-panel .lyrics-mode { margin-top: 2px; min-height: 26px; color: var(--muted); }
+.lyrics-offset { display: inline-flex; align-items: center; border: 1px solid color-mix(in srgb, var(--line) 85%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--surface) 42%, transparent); overflow: hidden; }
+.lyrics-offset button { display: grid; place-items: center; height: 20px; min-width: 23px; padding: 0 5px; color: var(--muted); font-size: 9.5px; font-variant-numeric: tabular-nums; }
+.lyrics-offset button:hover:not(:disabled) { background: var(--raised); color: var(--accent); }
+.lyrics-offset-value { min-width: 46px; border-left: 1px solid color-mix(in srgb, var(--line) 75%, transparent); border-right: 1px solid color-mix(in srgb, var(--line) 75%, transparent); color: var(--secondary-text); }
+.lyrics-offset-value.adjusted { color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .lyrics-panel .follow-lyrics { border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); background: color-mix(in srgb, var(--surface) 55%, transparent); backdrop-filter: blur(12px); color: var(--accent); font-weight: 550; }
 .lyrics-panel .follow-lyrics:hover { background: var(--active-bg); }
 .lyrics-panel .lyrics-credit { font-size: 10px; letter-spacing: .01em; }

@@ -12,6 +12,7 @@ export interface Preferences {
   trackArtwork: boolean;
   albumSort: AlbumSort;
   lyricsSize: LyricsSize;
+  lyricsOffset: number;
   lyricsFollow: boolean;
   lyricsBackdrop: boolean;
 }
@@ -28,6 +29,7 @@ export const defaultPreferences: Preferences = {
   trackArtwork: true,
   albumSort: "newest",
   lyricsSize: "standard",
+  lyricsOffset: 0,
   lyricsFollow: true,
   lyricsBackdrop: true,
 };
@@ -42,6 +44,9 @@ export function sanitizePreferences(value: unknown): Preferences {
   const boolean = (key: keyof Preferences) => typeof saved[key] === "boolean" ? saved[key] as boolean : defaultPreferences[key] as boolean;
   const volume = typeof saved.volume === "number" && Number.isFinite(saved.volume)
     ? Math.max(0, Math.min(100, Math.round(saved.volume))) : defaultPreferences.volume;
+  const lyricsOffset = typeof saved.lyricsOffset === "number" && Number.isFinite(saved.lyricsOffset)
+    ? Math.min(10, Math.max(-10, Number((Math.round(saved.lyricsOffset * 10) / 10).toFixed(1))))
+    : defaultPreferences.lyricsOffset;
   return {
     allowStereo: boolean("allowStereo"),
     exclusiveMode: boolean("exclusiveMode"),
@@ -52,6 +57,7 @@ export function sanitizePreferences(value: unknown): Preferences {
     trackArtwork: boolean("trackArtwork"),
     albumSort: oneOf(saved.albumSort, ["newest", "title", "artist"] as const, defaultPreferences.albumSort),
     lyricsSize: oneOf(saved.lyricsSize, ["small", "standard", "large"] as const, defaultPreferences.lyricsSize),
+    lyricsOffset,
     lyricsFollow: boolean("lyricsFollow"),
     lyricsBackdrop: boolean("lyricsBackdrop"),
   };

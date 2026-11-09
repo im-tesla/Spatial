@@ -15,6 +15,7 @@ import ExternalLink from "./ExternalLink";
 import type { useController } from "./useController";
 import { defaultPreferences } from "./preferences";
 import type { Preferences } from "./preferences";
+import { clampLyricsOffset, formatLyricsOffset, lyricsOffsetStep, maxLyricsOffset, minLyricsOffset } from "./lyricsOffset";
 import type { AudioDevice, Library, PlaybackStatus } from "./types";
 import "./settings-page.css";
 
@@ -85,6 +86,9 @@ export default function SettingsPage({ tab, onTab, onClose, preferences, onChang
   const volumeId = `${id}-volume`;
   const deviceDescription = devices.find(item => item.name === device)?.description || (device ? "Saved audio endpoint" : "No output selected");
   const stereo = preferences.allowStereo;
+  const offsetPosition = (preferences.lyricsOffset - minLyricsOffset) / (maxLyricsOffset - minLyricsOffset) * 100;
+  const offsetStart = Math.min(50, offsetPosition);
+  const offsetEnd = Math.max(50, offsetPosition);
 
   function keyDown(event: KeyboardEvent) {
     const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"];
@@ -218,6 +222,18 @@ export default function SettingsPage({ tab, onTab, onClose, preferences, onChang
             <Row title="Text size" description="Scales lyrics in the side panel and fullscreen player.">
               <Segmented label="Lyrics text size" value={preferences.lyricsSize} onChange={lyricsSize => onChange({ lyricsSize })}
                 options={[{ value: "small", label: "Small" }, { value: "standard", label: "Standard" }, { value: "large", label: "Large" }]} />
+            </Row>
+            <Row title="Sync offset" description="Shift lyric timing when a source runs early or late. Positive values show lyrics later.">
+              <div className="offset-setting">
+                <input aria-label="Lyrics offset" type="range" min={minLyricsOffset} max={maxLyricsOffset} step={lyricsOffsetStep}
+                  value={preferences.lyricsOffset}
+                  style={{ "--offset-start": `${offsetStart}%`, "--offset-end": `${offsetEnd}%` } as CSSProperties}
+                  onChange={event => onChange({ lyricsOffset: clampLyricsOffset(Number(event.target.value)) })} />
+                <span>{formatLyricsOffset(preferences.lyricsOffset)}</span>
+                <button className="secondary small" disabled={preferences.lyricsOffset === 0} onClick={() => onChange({ lyricsOffset: 0 })}>
+                  <RotateCcw size={13} /> Reset
+                </button>
+              </div>
             </Row>
             <Row title="Artwork backdrop" description="Let the current cover glow softly behind the lyrics panel.">
               <Switch checked={preferences.lyricsBackdrop} label="Show lyrics artwork backdrop" onChange={() => onChange({ lyricsBackdrop: !preferences.lyricsBackdrop })} />

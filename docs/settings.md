@@ -31,7 +31,7 @@ Settings is a full page reached from the bottom of the sidebar, with a tab for e
 | General | Library counts, server connection and change/disconnect, updates, reset preferences and credits |
 | Playback | Audio output device, allow stereo playback, exclusive mode, software volume |
 | Appearance | Artwork colors, reduce motion, layout density, track artwork, album order |
-| Lyrics | Text size, artwork backdrop, automatic following |
+| Lyrics | Text size, sync offset, artwork backdrop, automatic following |
 | Integrations | Discord activity, phone remote |
 | Controls | Controller enablement and button mappings |
 
@@ -39,8 +39,10 @@ Preferences are stored in local app storage under `spatial-preferences:v1`; favo
 
 ## Lyrics
 
+![Spatial lyrics settings with text size, sync offset and artwork backdrop](screenshots/settings-lyrics.jpg)
+
 The side panel and fullscreen player share one reading experience: the active line is bright and scaled up, surrounding lines recede, and the current cover colors the background. Word timing from a local TTML sidecar or LRCLIB fills each word as it is sung. A sidecar is credited as **Local lyrics**; service results link to **LRCLIB**.
 
-**Text size** scales both views. **Artwork backdrop** controls the side panel's cover wash. **Follow the song** keeps the active line centered; scrolling the panel pauses following until **Follow song** is pressed or a line is clicked.
+**Text size** scales both views. **Sync offset** shifts lyric timing by up to ±10 seconds in 0.1-second steps; positive values show lyrics later. **Artwork backdrop** controls the side panel's cover wash. **Follow the song** keeps the active line centered; scrolling the panel pauses following until **Follow song** is pressed or a line is clicked.
 
 See the [lyrics guide](lyrics.md) for sidecar naming and timing support.
