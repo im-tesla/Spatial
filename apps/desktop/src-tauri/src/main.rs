@@ -345,15 +345,7 @@ fn open_external_link(url: String) -> Result<(), String> {
             .map(|_| ())
             .map_err(|error| format!("Could not open the link: {error}"))
     }
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(&url)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| format!("Could not open the link: {error}"))
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     {
         let _ = url;
         Err("Opening links is not supported on this platform".into())
