@@ -12,7 +12,9 @@ function Get-RemoteFile {
     for ($attempt = 1; $attempt -le 4; $attempt++) {
         try {
             if (Test-Path -LiteralPath $OutFile) { Remove-Item -LiteralPath $OutFile -Force }
-            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -MaximumRedirection 5 -UseBasicParsing
+            & curl.exe --fail --location --silent --show-error --ipv4 --http1.1 --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 600 --output $OutFile $Uri
+            if ($LASTEXITCODE -ne 0) { throw "curl exited with code $LASTEXITCODE" }
+            if (-not (Test-Path -LiteralPath $OutFile) -or (Get-Item -LiteralPath $OutFile).Length -eq 0) { throw 'Downloaded file is empty.' }
             return
         } catch {
             if ($attempt -eq 4) { throw }
@@ -26,7 +28,9 @@ function Get-RemoteText {
     param([string]$Uri)
     for ($attempt = 1; $attempt -le 4; $attempt++) {
         try {
-            return (Invoke-WebRequest -Uri $Uri -MaximumRedirection 5 -UseBasicParsing).Content
+            $content = & curl.exe --fail --location --silent --show-error --ipv4 --http1.1 --retry 3 --retry-all-errors --retry-delay 3 --connect-timeout 20 --max-time 120 $Uri
+            if ($LASTEXITCODE -ne 0) { throw "curl exited with code $LASTEXITCODE" }
+            return ($content -join "`n")
         } catch {
             if ($attempt -eq 4) { throw }
             Write-Warning "Download failed (attempt $attempt of 4): $($_.Exception.Message)"
