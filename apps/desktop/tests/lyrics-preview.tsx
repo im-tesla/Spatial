@@ -43,7 +43,7 @@ function Fixture() {
   const progress = { position, duration: 20, disabled: false, onScrub: setPosition, onSeek: setPosition };
   return <MotionConfig reducedMotion="user"><div style={createTheme([140,70,190])}><div className={`app-shell ${open ? "lyrics-open" : ""}`} style={{ "--lyrics-width": `${width}px`, "--lyrics-space": open ? `${width}px` : "0px" } as CSSProperties}>
     <aside className="sidebar"><div className="brand">spatial.</div></aside>
-    <main className="main-content"><div className="library-heading"><span className="eyebrow">VISUAL TEST FIXTURE · NO AUDIO</span><h1>Lyrics panel</h1></div>
+    <main className="main-content"><div className="page-header"><span className="eyebrow">VISUAL TEST FIXTURE · NO AUDIO</span><h1>Lyrics panel</h1></div>
       <button className="secondary" onClick={() => setOpen(true)}>Open lyrics</button>
       <button className="secondary" onClick={() => setFull(true)}>Fullscreen preview</button>
       <button className="secondary" onClick={() => setPaused(value => !value)}>{paused ? "Resume clock" : "Pause clock"}</button>

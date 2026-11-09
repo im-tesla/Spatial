@@ -16,7 +16,7 @@ const controller = createUpdateController({
   cancel: () => call("cancel_update"),
 });
 
-export default function UpdateStatus() {
+export default function UpdateStatus({ variant = "full" }: { variant?: "full" | "compact" }) {
   const [state, setState] = useState(controller.snapshot);
   const [supported, setSupported] = useState(false);
   useEffect(() => {
@@ -32,18 +32,20 @@ export default function UpdateStatus() {
     return () => { unsubscribe(); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [supported]);
   if (!enabled || !supported) return null;
+  // The sidebar only speaks up when there is something to install.
+  if (variant === "compact" && !state.version) return null;
   const installing = state.phase === "downloading" || state.phase === "installing" || state.phase === "installed";
-  return <section className="client-updates" aria-label="App updates">
+  return <section className={`client-updates ${variant}`} aria-label="App updates">
     {state.version && <p className="update-version">Spatial {state.version} {state.phase === "installed" ? "installed" : "available"}</p>}
     {state.message && <p className="update-message" role="status">{state.message}</p>}
     {state.version ? <button className="update-button" disabled={installing || state.phase === "checking"} onClick={() => void controller.install()}>
       {installing ? <LoaderCircle className="spin" size={13} /> : <Download size={13} />}
       {state.phase === "downloading" ? `Downloading${state.percent === undefined ? "…" : ` ${state.percent}%`}`
         : state.phase === "installing" ? "Installing…" : state.phase === "installed" ? "Restarting…" : "Update and restart"}
-    </button> : <button className="update-button" disabled={state.phase === "checking"} onClick={() => void controller.check(true)}>
+    </button> : variant === "full" ? <button className="update-button" disabled={state.phase === "checking"} onClick={() => void controller.check(true)}>
       {state.phase === "checking" ? <LoaderCircle className="spin" size={13} /> : <RefreshCw size={13} />}
       {state.phase === "checking" ? "Checking…" : state.phase === "current" ? "You're up to date" : "Check for updates"}
-    </button>}
+    </button> : null}
     {state.phase === "downloading" && state.percent !== undefined && <progress aria-label="Update download" value={state.percent} max={100} />}
   </section>;
 }

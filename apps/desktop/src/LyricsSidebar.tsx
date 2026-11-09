@@ -5,15 +5,16 @@ import BackdropCover from "./BackdropCover";
 import { clampLyricsWidth, defaultLyricsWidth, minLyricsWidth } from "./lyricsLayout";
 import type { Track } from "./types";
 
-export default function LyricsSidebar({ width, maximum, onResize, onClose, track, position, playing, onSeek, paused = false, sourceKey }: {
+export default function LyricsSidebar({ width, maximum, onResize, onClose, track, position, playing, onSeek, paused = false, sourceKey, backdrop = true, follow = true }: {
   width: number; maximum: number; onResize: (width: number) => void; onClose: () => void;
   track: Track | null; position: number; playing: boolean; onSeek: (seconds: number) => void; paused?: boolean; sourceKey?: string;
+  backdrop?: boolean; follow?: boolean;
 }) {
   const drag = useRef<{ x: number; width: number } | null>(null);
   const [resizing, setResizing] = useState(false);
-  return <aside id="lyrics-sidebar" className={`lyrics-sidebar ${resizing ? "resizing" : ""}`} aria-labelledby="lyrics-title" data-playing={playing && !paused}
+  return <aside id="lyrics-sidebar" className={`lyrics-sidebar ${resizing ? "resizing" : ""} ${backdrop ? "" : "no-backdrop"}`} aria-labelledby="lyrics-title" data-playing={playing && !paused}
     onKeyDown={event => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}>
-    <div className="lyrics-sidebar-atmosphere" aria-hidden="true"><BackdropCover id={track?.artwork_id || null} /></div>
+    {backdrop && <div className="lyrics-sidebar-atmosphere" aria-hidden="true"><BackdropCover id={track?.artwork_id || null} /></div>}
     <div className="lyrics-resize" role="separator" tabIndex={0} aria-label="Resize lyrics panel" aria-orientation="vertical"
       aria-controls="lyrics-sidebar" aria-valuemin={minLyricsWidth} aria-valuemax={maximum} aria-valuenow={width} aria-valuetext={`${width} pixels`}
       onPointerDown={event => {
@@ -35,6 +36,6 @@ export default function LyricsSidebar({ width, maximum, onResize, onClose, track
     <div className="lyrics-sidebar-heading"><h2 id="lyrics-title">Lyrics</h2><div>
       <button className="icon-button" aria-label="Close lyrics panel" onClick={onClose}><X size={19} /></button>
     </div></div>
-    <LyricsPanel track={track} position={position} playing={playing} paused={paused} onSeek={onSeek} sourceKey={sourceKey} />
+    <LyricsPanel track={track} position={position} playing={playing} paused={paused} onSeek={onSeek} sourceKey={sourceKey} followByDefault={follow} />
   </aside>;
 }

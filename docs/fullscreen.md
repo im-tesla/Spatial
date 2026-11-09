@@ -1,5 +1,7 @@
 # Fullscreen listening
 
+![Spatial fullscreen player with artwork and synced lyrics](screenshots/fullscreen-listening.jpg)
+
 Start a track, then click the **fullscreen icon** at the right end of the player bar. Spatial fills the screen with the album cover, track information and playback controls on the left, and lyrics on the right.
 
 - Pause, skip, shuffle, repeat and favorite the current track using the same player and queue as the main view.
@@ -8,6 +10,6 @@ Start a track, then click the **fullscreen icon** at the right end of the player
 - Press **Space** to pause or resume when a button, link or progress bar is not focused.
 - Press **Esc** or click the exit icon at the top right to return to the collection. Playback continues, and Spatial restores the previous window mode.
 
-Artwork changes fade into the next album's palette. Softened background textures are generated once per cover and cached. The background moves gently while playback runs and pauses with the music. The system's reduced-motion preference disables ambient animation and animated transitions. Linux's X11 renderer fallback uses a still background and solid lyric highlights while keeping album crossfades and cue scrolling.
+Artwork changes fade into the next album's palette. Softened background textures are generated once per cover and cached. The background moves gently while playback runs and pauses with the music. The system's reduced-motion preference or **Reduce motion** in Settings disables ambient animation and animated transitions. Linux's X11 renderer fallback uses a still background and solid lyric highlights while keeping album crossfades and cue scrolling.
 
-Lyrics share the same [timed word highlights](lyrics.md) as the sidebar, preferring the server's TTML sidecar and using LRCLIB and its local cache as fallback. Word timestamps highlight each word independently when available; line-only lyrics highlight the current line. Recordings with untimed lyrics show readable text; instrumental tracks, missing lyrics and connection errors each have their own state. Fullscreen does not change the native HDMI playback path.
+Lyrics share the same [timed word highlights](lyrics.md) as the sidebar, preferring local sidecar lyrics and using LRCLIB and its local cache as fallback. Word timestamps highlight each word independently when available; line-only lyrics highlight the current line. Recordings with untimed lyrics show readable text; instrumental tracks, missing lyrics and connection errors each have their own state. Fullscreen uses the same Dolby bitstream or stereo PCM path selected in Settings → Playback.

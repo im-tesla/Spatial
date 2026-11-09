@@ -32,7 +32,7 @@ export default function RemoteSettings() {
     finally { setBusy(false); }
   }
   return <section className="preference-section phone-remote" aria-labelledby="remote-heading">
-    <div className="preference-row"><div><h3 id="remote-heading">Phone remote</h3><p>Control playback from your phone.</p></div>
+    <div className="preference-row"><div><h3 id="remote-heading">Enable phone remote</h3><p>Control playback from your phone.</p></div>
       <button type="button" className={`preference-switch ${settings?.enabled ? "enabled" : ""}`} role="switch" aria-checked={!!settings?.enabled}
         aria-label="Enable phone remote" disabled={!native || !settings || busy || (!settings.enabled && !address)}
         onClick={() => void configure(settings?.enabled ? "stop_remote" : "start_remote")}><span /></button>

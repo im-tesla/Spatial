@@ -231,7 +231,7 @@ async fn inspect_atmos(state: &AppState, path: &Path) -> bool {
     }
 }
 
-async fn digest(path: &Path) -> Result<String> {
+pub(crate) async fn digest(path: &Path) -> Result<String> {
     let mut file = tokio::fs::File::open(path).await?;
     let mut buffer = vec![0; 1024 * 1024];
     let mut hash = Sha256::new();

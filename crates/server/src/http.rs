@@ -56,6 +56,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/tracks/{id}/playback", post(grant))
         .route("/api/tracks/{id}/lyrics", get(lyrics))
         .route("/api/artwork/{id}", get(artwork))
+        .route("/api/artists/artwork", get(artist_portrait))
         .route_layer(middleware::from_fn_with_state(state.clone(), authorize));
     Router::new()
         .merge(protected)
@@ -259,6 +260,22 @@ async fn artwork(
         return Err(ApiError(StatusCode::NOT_FOUND, "Artwork not found".into()));
     }
     serve_file(state.artwork_root.join(format!("{id}.jpg")), request, true).await
+}
+
+#[derive(Deserialize)]
+struct ArtistQuery {
+    name: String,
+}
+
+async fn artist_portrait(
+    State(state): State<AppState>,
+    Query(query): Query<ArtistQuery>,
+    request: Request,
+) -> ApiResult<Response> {
+    let path = crate::artists::portrait_path(&state, &query.name)
+        .await?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Artist portrait not found".into()))?;
+    serve_file(path, request, true).await
 }
 
 async fn serve_file(

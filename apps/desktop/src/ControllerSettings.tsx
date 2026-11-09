@@ -15,7 +15,7 @@ export default function ControllerSettings({ controller }: { controller: ReturnT
     catch { setError("Controller settings couldn't be saved. Check that local app storage is available."); setMessage(""); }
   }
   return <section className="preference-section controller-settings" aria-labelledby="controller-heading">
-    <div className="preference-row"><div><h3 id="controller-heading">Controller</h3><p>Browse and listen from your controller.</p></div>
+    <div className="preference-row"><div><h3 id="controller-heading">Enable controller controls</h3><p>Browse and listen from your controller.</p></div>
       <button className={`preference-switch ${draft.enabled ? "enabled" : ""}`} role="switch" aria-label="Enable controller controls" aria-checked={draft.enabled}
         onClick={() => { setDraft(previous => ({ ...previous, enabled: !previous.enabled })); setMessage(""); }}><span /></button></div>
     <p className="preference-note" role="status">{controller.profile.enabled ? controller.status || "Press a controller button to connect." : "Controller controls are off."}</p>

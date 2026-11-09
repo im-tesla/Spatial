@@ -27,7 +27,7 @@ Desktop playback tracks its own mpv processes and cleans up orphaned players aft
 
 [Controller controls](controller.md) use a pure, tested sampler and local Settings mappings. The opt-in `controller` preview fixture provides simulated standard-controller input; native foreground checks remain enabled in the desktop app.
 
-Run `npx playwright install chromium` once in `apps/desktop`, then `npm run test:controller` for the isolated controller interface checks. They cover dropdown cancellation, draft/save/reset behavior, remapping persistence, switches and ranges, fullscreen Back, inactive/disconnected input, and navigation in both directions through a long track list. These use simulated input, not physical hardware.
+Run `npx playwright install chromium` once in `apps/desktop`, then `npm run test:controller` for the isolated interface checks. They cover the controller UI, artists, the settings page, stereo preference propagation, sidebar search, tabbed settings, dropdown cancellation, draft/save/reset behavior, remapping persistence, switches and ranges, fullscreen Back, inactive/disconnected input, and navigation in both directions through a long track list. These use simulated input, not physical hardware.
 
 ## Local server development
 
@@ -83,11 +83,11 @@ The [build workflow](../.github/workflows/build.yml) defines Linux server checks
 | Catalog and API | Rust, Axum, SQLite, FFprobe, optional MediaInfo, filesystem watcher and Server-Sent Events |
 | Interface | React, TypeScript, Vite, Motion, Lucide and locally bundled Inter |
 | Desktop bridge | Tauri commands, native HTTP requests, Windows Credential Manager or Linux Secret Service |
-| Playback | mpv process, named-pipe/Unix-socket IPC, compressed Dolby transport and WASAPI exclusive or ALSA HDMI output |
+| Playback | mpv process, named-pipe/Unix-socket IPC, compressed Dolby transport or stereo PCM, WASAPI exclusive/shared or ALSA output |
 
 Authenticated API requests return the catalog, artwork and short-lived signed playback URLs. HTTP byte ranges support buffering and seeking. Media paths are checked against the configured root. The server streams original bytes; the desktop demuxes and passes Dolby frames to the receiver.
 
-mpv is started without user config or external scripts. `--audio-spdif=eac3,truehd` selects compressed output; `--ad=-` prevents permitted PCM decoders from being used on fallback. The client also checks the output format and driver. The decoder restriction is deprecated upstream, so changes to the pinned engine must pass the fallback regression checks.
+mpv is started without user config or external scripts. The default path uses `--audio-spdif=eac3,truehd` for compressed output; `--ad=-` prevents permitted PCM decoders from being used on fallback. The client also checks the output format and driver. With **Allow stereo playback**, Spatial instead permits mpv's decoders, requests `--audio-channels=stereo`, and applies the saved software volume; exclusive mode becomes optional. The decoder restriction is deprecated upstream, so changes to the pinned engine must pass the fallback regression checks.
 
 Atmos badges require explicit source metadata; codec name or channel count alone is not proof of Atmos. Receiver decoding is outside the client's telemetry. Artwork palettes are extracted locally. Favorites are stored per server in client storage, while saved server tokens remain in native code.
 

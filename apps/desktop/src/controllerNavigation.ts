@@ -24,7 +24,7 @@ function key(element: HTMLElement, name: string) {
 function initial(root: HTMLElement, controls: HTMLElement[]) {
   return controls.find(element => root !== document.body && element.matches(".play-button"))
     || controls.find(element => element.closest(".main-content") && element.matches(".artwork-wrap, .track-title"))
-    || controls.find(element => element.closest(".main-content") && !element.closest(".topbar"))
+    || controls.find(element => element.closest(".main-content"))
     || controls.find(element => element.matches(".nav-item.active")) || controls[0];
 }
 export function controllerNavigation(action: ControllerAction): boolean {

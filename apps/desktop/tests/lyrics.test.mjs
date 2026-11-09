@@ -201,7 +201,7 @@ test("missing, invalid or unavailable sidecars fall back to the existing service
 
 test("line-only sidecars never invent word times and local lookups refresh across revisions", async () => {
   globalThis.localStorage = storage();
-  globalThis.fetch = async () => { throw new Error("Local TTML must not contact a provider"); };
+  globalThis.fetch = async () => { throw new Error("Local lyrics must not contact a provider"); };
   const { getLyrics } = await import("../src/lyrics.ts?local-refresh");
   const lineOnly = { plainLyrics: "A quiet room", lines: [{ time: 10.46, end: 11.764, text: "A quiet room" }] };
   const first = await getLyrics(localTrack, { key: "server:1", load: async () => lineOnly });

@@ -34,6 +34,12 @@ const friendLibrary = new URLSearchParams(location.search).get("library") === "f
 if (showcase) albums.push(
   { id: "fixture-tidal", title: "Tidal Forms", artist: "Lowlight", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-blue" },
   { id: "fixture-afterglow", title: "Afterglow", artist: "Mira Vale", date: "2025", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-rose" },
+  { id: "fixture-forest", title: "Quiet Geometry", artist: "Aster", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-green" },
+  { id: "fixture-hours", title: "Blue Hours", artist: "Nova Drift", date: "2024", track_count: 3, duration: 60, atmos: false, artwork_id: "fixture-cyan" },
+  { id: "fixture-fieldnotes", title: "Field Notes", artist: "Aster", date: "2024", track_count: 3, duration: 60, atmos: false, artwork_id: "fixture-sand" },
+  { id: "fixture-glasshouse", title: "Glasshouse", artist: "Lowlight", date: "2024", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-slate" },
+  { id: "fixture-nocturne", title: "Nocturne", artist: "Mira Vale", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-crimson" },
+  { id: "fixture-drift", title: "Drift", artist: "Nova Drift", date: "2026", track_count: 3, duration: 60, atmos: true, artwork_id: "fixture-teal" },
 );
 const tracks: Track[] = ["A quiet room", "A little space", "Every note comes home", "Morning light"].map((title, index) => {
   const album = albums[index === 3 ? 1 : 0];
@@ -53,7 +59,6 @@ if (friendLibrary) {
   for (const album of albums) album.id = `friend-${album.id}`;
   for (const track of tracks) { track.id = `friend-${track.id}`; track.album_id = `friend-${track.album_id}`; }
 }
-if (lyricsScenario) for (const track of tracks) track.title += ` · ${lyricsScenario} lyrics preview`;
 if (new URLSearchParams(location.search).has("long")) for (let index = 0; index < 20; index++) tracks.push({ ...tracks[0],
   id: `controller-long-${index}`, title: `Controller track ${index + 1}`, track_number: index + 4 });
 if (new URLSearchParams(location.search).has("long-title")) tracks[0].title = "A very long recording title, with an extended edition and a little more room for the music to breathe";
@@ -66,7 +71,9 @@ let fullscreen = false;
 const previewUpdateVersion = appPackage.version.replace(/\d+$/, patch => String(Number(patch) + 1));
 const covers = new Map<string, string>();
 for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fixture-orange", "#b56937", "#292025"],
-  ["fixture-blue", "#407788", "#101e2b"], ["fixture-rose", "#a44b6c", "#251629"]]) {
+  ["fixture-blue", "#407788", "#101e2b"], ["fixture-rose", "#a44b6c", "#251629"], ["fixture-green", "#647548", "#151b10"],
+  ["fixture-cyan", "#3f6f7d", "#101a1f"], ["fixture-sand", "#a98d58", "#2a2418"], ["fixture-slate", "#6b7b8c", "#181d24"],
+  ["fixture-crimson", "#8e4352", "#25141a"], ["fixture-teal", "#3f7b72", "#10211f"]]) {
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = 256;
   const context = canvas.getContext("2d")!;
   if (showcase) {
@@ -88,8 +95,32 @@ for (const [id, color, dark] of [["fixture-purple", "#75459b", "#161323"], ["fix
   for (let size = 40; size < 230; size += 24) { context.beginPath(); context.arc(128,128,size/2,0,Math.PI*2); context.stroke(); }
   covers.set(id, canvas.toDataURL());
 }
+const artistCovers = new Map<string, string>();
+{
+  const names = [...new Set([...albums.map(album => album.artist), ...tracks.map(track => track.artist)])];
+  const palettes = [["#d8b26a", "#513d22"], ["#7fa4b8", "#253a46"], ["#c98b9e", "#48222e"], ["#9aa977", "#2d3820"], ["#8c8ab8", "#2b294d"]];
+  for (const [index, name] of names.entries()) {
+    const canvas = document.createElement("canvas"); canvas.width = canvas.height = 512;
+    const context = canvas.getContext("2d")!;
+    const [light, dark] = palettes[index % palettes.length];
+    const gradient = context.createLinearGradient(0, 0, 512, 512);
+    gradient.addColorStop(0, dark); gradient.addColorStop(.55, light); gradient.addColorStop(1, dark);
+    context.fillStyle = gradient; context.fillRect(0, 0, 512, 512);
+    const glow = context.createRadialGradient(170, 130, 0, 200, 180, 310);
+    glow.addColorStop(0, "#ffffff70"); glow.addColorStop(1, "#ffffff00");
+    context.fillStyle = glow; context.fillRect(0, 0, 512, 512);
+    context.strokeStyle = "#ffffff45"; context.lineWidth = 2;
+    for (let line = 0; line < 14; line++) {
+      context.beginPath();
+      context.moveTo(-40, 70 + line * 30);
+      context.bezierCurveTo(150, 260 + line * 8, 330, -60 + line * 20, 560, 120 + line * 26);
+      context.stroke();
+    }
+    artistCovers.set(name.toLowerCase(), canvas.toDataURL());
+  }
+}
 let status: PlaybackStatus = { track_id: null, active: false, paused: false, ended: false, position: 0, duration: 0,
-  passthrough: true, output_format: "spdif-eac3", output_driver: "wasapi", error: null };
+  passthrough: true, output_mode: "", output_format: "spdif-eac3", output_driver: "wasapi", volume: 80, error: null };
 if (new URLSearchParams(location.search).has("clock")) window.setInterval(() => {
   if (!status.active || status.paused) return;
   const position = Math.min(status.duration, status.position + .1);
@@ -99,6 +130,7 @@ mockIPC((command, args) => {
   const payload = args && !Array.isArray(args) && !(args instanceof ArrayBuffer) && !(args instanceof Uint8Array) ? args : {};
   if (command === "remote_settings") return { enabled: false, address: null, url: null, qr_svg: null, expires_in: 0, phones: 0,
     interfaces: [{ name: "Fixture Ethernet", address: "192.0.2.10" }, { name: "Fixture Wi-Fi", address: "192.0.2.20" }] };
+  if (command === "open_external_link") { console.info(`Fixture external link ${payload.url}`); return; }
   if (command === "controller_foreground") return nativeController && realNativeInvoke ? realNativeInvoke(command, payload) : controllerSimulation?.foreground ?? true;
   if (nativeController && realNativeInvoke && command.startsWith("plugin:window|")) return realNativeInvoke(command, payload);
   if (command === "controller_playback") {
@@ -154,9 +186,14 @@ mockIPC((command, args) => {
     })) };
   }
   if (command === "get_artwork") return covers.get(String(payload.id));
-  if (command === "audio_devices") return [{ name: "fixture-hdmi", description: "Simulated HDMI endpoint" }];
+  if (command === "get_artist_artwork") return artistCovers.get(String(payload.name).toLowerCase()) || null;
+  if (command === "audio_devices") return [{ name: "fixture-hdmi", description: "Simulated HDMI endpoint" },
+    { name: "fixture-headphones", description: "Simulated headphones" }];
   if (command === "playback_status") return { ...status };
+  if (command === "set_volume") { status = { ...status, volume: Number(payload.volume) }; return; }
   if (command === "play_track") status = { ...status, track_id: String(payload.id), active: true, paused: false, ended: false, position: 4,
+    passthrough: payload.allowStereo !== true,
+    output_mode: payload.allowStereo === true ? "stereo" : "bitstream", output_format: payload.allowStereo === true ? "float" : "spdif-eac3", volume: Number(payload.volume ?? 80),
     duration: tracks.find(track => track.id === payload.id)?.duration || 20 };
   if (command === "seek") status = { ...status, position: Number(payload.seconds) };
   if (command === "toggle_pause") status = { ...status, paused: !status.paused };

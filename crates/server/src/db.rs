@@ -30,6 +30,9 @@ pub async fn open(data_dir: &Path) -> Result<SqlitePool> {
         INSERT OR IGNORE INTO library_state VALUES (1, 0);
         CREATE TABLE IF NOT EXISTS remote_artwork_attempts (
             album_id TEXT PRIMARY KEY, attempted_at INTEGER NOT NULL, found INTEGER NOT NULL, artwork_id TEXT
+        );
+        CREATE TABLE IF NOT EXISTS artist_artwork_attempts (
+            artist_key TEXT PRIMARY KEY, attempted_at INTEGER NOT NULL, found INTEGER NOT NULL, artwork_id TEXT
         );"
     ).execute(&pool).await?;
     // Existing catalogs need one metadata refresh when tag interpretation changes.

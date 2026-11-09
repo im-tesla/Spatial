@@ -26,16 +26,52 @@ fn output_driver() -> &'static str {
     }
 }
 
-fn valid_device(device: &str) -> bool {
-    !device.contains(['\n', '\r', '\0'])
-        && if cfg!(windows) {
-            device.starts_with("wasapi/") && device.len() > 7
-        } else if cfg!(target_os = "linux") {
-            // Avoid default, dmix, PulseAudio and PipeWire routes that can alter the stream.
-            device.starts_with("alsa/hdmi:") && device.len() > 10
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct OutputOptions {
+    pub allow_stereo: bool,
+    pub exclusive: bool,
+    pub volume: f64,
+}
+
+impl OutputOptions {
+    fn stereo_volume(self) -> f64 {
+        if self.volume.is_finite() {
+            self.volume.clamp(0.0, 100.0)
         } else {
-            false
+            80.0
         }
+    }
+}
+
+fn valid_device(device: &str, allow_stereo: bool) -> bool {
+    if device.contains(['\n', '\r', '\0']) {
+        return false;
+    }
+    if cfg!(windows) {
+        return device.starts_with("wasapi/") && device.len() > 7;
+    }
+    if cfg!(target_os = "linux") {
+        if !device.starts_with("alsa/") || device.len() <= 5 {
+            return false;
+        }
+        // Avoid shared routes that can alter the stream. HDMI-only is required
+        // for compressed Dolby; stereo headphones may use a direct hardware device.
+        if allow_stereo {
+            return ![
+                "alsa/default",
+                "alsa/null",
+                "alsa/dmix",
+                "alsa/pulse",
+                "alsa/pipewire",
+                "alsa/jack",
+                "alsa/sysdefault",
+            ]
+            .iter()
+            .any(|prefix| device == *prefix || device.starts_with(&format!("{prefix}:")));
+        }
+        return device.starts_with("alsa/hdmi:") && device.len() > 10;
+    }
+    false
 }
 
 #[cfg(windows)]
@@ -62,8 +98,10 @@ pub struct PlaybackStatus {
     pub position: f64,
     pub duration: f64,
     pub passthrough: bool,
+    pub output_mode: String,
     pub output_format: String,
     pub output_driver: String,
+    pub volume: f64,
     pub error: Option<String>,
 }
 
@@ -79,6 +117,7 @@ pub struct Player {
     request_id: u64,
     pub status: PlaybackStatus,
     started: Option<Instant>,
+    volume: f64,
 }
 
 pub fn executable() -> Result<PathBuf, String> {
@@ -154,7 +193,7 @@ pub async fn devices() -> Result<Vec<AudioDevice>, String> {
         let Some((name, description)) = tail.split_once('\'') else {
             continue;
         };
-        if valid_device(name) {
+        if valid_device(name, true) {
             result.push(AudioDevice {
                 name: name.into(),
                 description: description
@@ -192,19 +231,37 @@ impl Player {
         self.status.active = false;
         self.status.ended = false;
         self.status.passthrough = false;
+        self.status.output_mode.clear();
         self.started = None;
     }
 
-    pub async fn play(&mut self, url: &str, track: &Track, device: &str) -> Result<(), String> {
-        if !matches!(track.codec.as_str(), "eac3" | "truehd") {
+    pub async fn play(
+        &mut self,
+        url: &str,
+        track: &Track,
+        device: &str,
+        options: OutputOptions,
+    ) -> Result<(), String> {
+        let stereo = options.allow_stereo;
+        if !stereo && !matches!(track.codec.as_str(), "eac3" | "truehd") {
             return Err(format!(
-                "{} is not supported by the compressed Dolby playback path",
-                track.codec
+                "{} needs stereo playback. Turn on Allow stereo playback in Settings → Playback.",
+                track.codec.to_uppercase()
             ));
         }
-        if !valid_device(device) {
-            return Err("Select an HDMI audio output in Output settings".into());
+        if !valid_device(device, stereo) {
+            return Err(if stereo {
+                "Select an audio output in Settings → Playback".into()
+            } else {
+                "Select the HDMI output connected to your receiver, or turn on Allow stereo playback for headphones".into()
+            });
         }
+        let exclusive = !stereo || options.exclusive;
+        let volume = if stereo {
+            options.stereo_volume()
+        } else {
+            100.0
+        };
         self.stop().await;
         let registry = self
             .registry_directory
@@ -213,10 +270,17 @@ impl Player {
         cleanup_orphans(registry.clone()).await?;
         #[cfg(any(windows, target_os = "linux"))]
         let mut launch = command()?;
+        self.volume = volume;
         self.status = PlaybackStatus {
             track_id: Some(track.id.clone()),
             duration: track.duration,
             active: true,
+            output_mode: if stereo {
+                "stereo".into()
+            } else {
+                "bitstream".into()
+            },
+            volume,
             ..Default::default()
         };
         self.started = Some(Instant::now());
@@ -251,20 +315,31 @@ impl Player {
                     "--osc=no",
                     "--terminal=no",
                     "--input-terminal=no",
-                    "--audio-spdif=eac3,truehd",
-                    "--audio-exclusive=yes",
                     "--audio-fallback-to-null=no",
-                    "--volume=100",
                     "--replaygain=no",
                     "--speed=1",
-                    // Passthrough selection bypasses this list. On passthrough failure, the
-                    // PCM fallback has no permitted decoders. Pin and test the mpv build.
-                    "--ad=-",
                     "--keep-open=no",
                     "--cache=yes",
                     "--demuxer-max-bytes=67108864",
                     "--audio-buffer=0.8",
                 ])
+                .arg(format!(
+                    "--audio-exclusive={}",
+                    if exclusive { "yes" } else { "no" }
+                ))
+                .arg(format!("--volume={volume:.0}"));
+            if stereo {
+                // Headphone listening decodes every codec to two-channel PCM.
+                launch.args(["--audio-channels=stereo"]);
+            } else {
+                launch.args([
+                    "--audio-spdif=eac3,truehd",
+                    // Passthrough selection bypasses this list. On passthrough failure, the
+                    // PCM fallback has no permitted decoders. Pin and test the mpv build.
+                    "--ad=-",
+                ]);
+            }
+            launch
                 .arg(format!("--ao={}", output_driver()))
                 .arg(format!("--audio-device={device}"))
                 .arg(format!("--input-ipc-server={pipe}"))
@@ -320,9 +395,9 @@ impl Player {
         }
         #[cfg(not(any(windows, target_os = "linux")))]
         {
-            let _ = url;
+            let _ = (url, exclusive);
             self.stop().await;
-            Err("Spatial bitstream playback supports Windows and Linux".into())
+            Err("Spatial playback supports Windows and Linux".into())
         }
     }
 
@@ -347,13 +422,19 @@ impl Player {
                 }
                 let response: Value = serde_json::from_str(&line).map_err(|e| e.to_string())?;
                 if response["event"] == "end-file" {
+                    let mode = status.output_mode.clone();
                     status.active = false;
                     status.passthrough = false;
+                    status.output_mode.clear();
                     status.output_format.clear();
                     status.output_driver.clear();
                     status.ended = response["reason"] == "eof";
                     if response["reason"] == "error" {
-                        status.error = Some("Dolby passthrough failed. Check the HDMI endpoint, receiver, and exclusive-mode availability.".into());
+                        status.error = Some(if mode == "stereo" {
+                            "Stereo playback failed. Check the selected audio output.".into()
+                        } else {
+                            "Dolby passthrough failed. Check the HDMI endpoint, receiver, and exclusive-mode availability.".into()
+                        });
                     }
                 }
                 if response["request_id"].as_u64() == Some(id) {
@@ -380,6 +461,22 @@ impl Player {
         self.request(json!(["seek", seconds, "absolute"]))
             .await
             .map(|_| ())
+    }
+
+    pub async fn set_volume(&mut self, volume: f64) -> Result<(), String> {
+        if !volume.is_finite() {
+            return Err("Invalid volume".into());
+        }
+        let volume = volume.clamp(0.0, 100.0);
+        self.volume = volume;
+        self.status.volume = volume;
+        #[cfg(any(windows, target_os = "linux"))]
+        if self.connection.is_some() {
+            self.request(json!(["set_property", "volume", volume]))
+                .await
+                .map(|_| ())?;
+        }
+        Ok(())
     }
 
     pub async fn poll(&mut self) -> PlaybackStatus {
@@ -414,9 +511,10 @@ impl Player {
         if !self.status.active {
             return Ok(());
         }
+        let stereo = self.status.output_mode == "stereo";
         if let Some(params) = self.property("audio-out-params").await? {
             let format = params["format"].as_str().unwrap_or("");
-            if !format.is_empty() && !matches!(format, "spdif-eac3" | "spdif-truehd") {
+            if !stereo && !format.is_empty() && !matches!(format, "spdif-eac3" | "spdif-truehd") {
                 return Err(
                     "Playback stopped because the engine selected PCM instead of Dolby passthrough"
                         .into(),
@@ -428,10 +526,17 @@ impl Player {
             self.status.output_driver = value.as_str().unwrap_or("").into();
             if !self.status.output_driver.is_empty() && self.status.output_driver != output_driver()
             {
-                return Err(
-                    "Playback stopped because direct HDMI output was not established".into(),
-                );
+                return Err(if stereo {
+                    "Playback stopped because the selected audio output was not established".into()
+                } else {
+                    "Playback stopped because direct HDMI output was not established".into()
+                });
             }
+        }
+        if stereo {
+            self.status.passthrough = false;
+            self.status.volume = self.volume;
+            return Ok(());
         }
         self.status.passthrough = self.status.output_driver == output_driver()
             && matches!(
@@ -533,6 +638,11 @@ mod tests {
                 } else {
                     "alsa/hdmi:CARD=SpatialMissing,DEV=0"
                 },
+                OutputOptions {
+                    allow_stereo: false,
+                    exclusive: true,
+                    volume: 100.0,
+                },
             )
             .await
             .unwrap();
@@ -556,7 +666,7 @@ mod tests {
 
     #[cfg(target_os = "linux")]
     #[test]
-    fn linux_rejects_shared_and_non_hdmi_outputs() {
+    fn linux_rejects_shared_outputs_for_bitstream_and_allows_direct_stereo() {
         for device in [
             "alsa/default",
             "alsa/dmix:CARD=PCH",
@@ -566,8 +676,15 @@ mod tests {
             "alsa/hdmi:",
             "alsa/hdmi:CARD=PCH\n",
         ] {
-            assert!(!valid_device(device), "Unexpectedly accepted {device}");
+            assert!(
+                !valid_device(device, false),
+                "Unexpectedly accepted {device} for bitstream"
+            );
         }
-        assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1"));
+        assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1", false));
+        assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1", true));
+        assert!(valid_device("alsa:hw:CARD=Headphones,DEV=0", true));
+        assert!(!valid_device("alsa/default", true));
+        assert!(!valid_device("alsa/dmix:CARD=PCH", true));
     }
 }

@@ -121,6 +121,14 @@ async fn get_artwork(id: String, state: State<'_, NativeState>) -> Result<String
 }
 
 #[tauri::command]
+async fn get_artist_artwork(
+    name: String,
+    state: State<'_, NativeState>,
+) -> Result<Option<String>, String> {
+    session(&state).await?.artist_artwork(&name).await
+}
+
+#[tauri::command]
 async fn get_track_lyrics(
     id: String,
     state: State<'_, NativeState>,
@@ -137,6 +145,9 @@ async fn audio_devices() -> Result<Vec<AudioDevice>, String> {
 async fn play_track(
     id: String,
     device: String,
+    allow_stereo: bool,
+    exclusive: bool,
+    volume: f64,
     state: State<'_, NativeState>,
 ) -> Result<(), String> {
     let updating = state.updating.lock().await;
@@ -146,7 +157,18 @@ async fn play_track(
     let (grant, url) = session(&state).await?.grant(&id).await?;
     let mut player = state.player.lock().await;
     state.discord.clear();
-    let result = player.play(&url, &grant.track, &device).await;
+    let result = player
+        .play(
+            &url,
+            &grant.track,
+            &device,
+            playback::OutputOptions {
+                allow_stereo,
+                exclusive,
+                volume,
+            },
+        )
+        .await;
     if let Err(error) = &result {
         player.stop().await;
         player.status.error = Some(error.clone());
@@ -177,6 +199,11 @@ async fn seek(seconds: f64, state: State<'_, NativeState>) -> Result<(), String>
     player.seek(seconds).await?;
     state.discord.playback(&player.poll().await);
     Ok(())
+}
+
+#[tauri::command]
+async fn set_volume(volume: f64, state: State<'_, NativeState>) -> Result<(), String> {
+    state.player.lock().await.set_volume(volume).await
 }
 
 #[tauri::command]
@@ -288,6 +315,51 @@ fn controller_foreground(window: tauri::WebviewWindow) -> bool {
     controller::foreground(&window)
 }
 
+fn allowed_external_link(url: &str) -> bool {
+    matches!(
+        url,
+        "https://github.com/im-tesla/Spatial" | "https://lrclib.net"
+    )
+}
+
+#[tauri::command]
+fn open_external_link(url: String) -> Result<(), String> {
+    if !allowed_external_link(&url) {
+        return Err("This link is not available".into());
+    }
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .creation_flags(0x08000000)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Could not open the link: {error}"))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Could not open the link: {error}"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("Could not open the link: {error}"))
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux", target_os = "macos")))]
+    {
+        let _ = url;
+        Err("Opening links is not supported on this platform".into())
+    }
+}
+
 #[tauri::command]
 async fn controller_playback(
     action: controller::PlaybackAction,
@@ -358,12 +430,14 @@ fn main() {
             disconnect_server,
             get_library,
             get_artwork,
+            get_artist_artwork,
             get_track_lyrics,
             audio_devices,
             play_track,
             playback_status,
             toggle_pause,
             seek,
+            set_volume,
             stop_playback,
             prepare_update,
             cancel_update,
@@ -380,6 +454,7 @@ fn main() {
             remote_command_pending,
             complete_remote_command,
             controller_foreground,
+            open_external_link,
             controller_playback
         ])
         .build(tauri::generate_context!())
@@ -397,4 +472,24 @@ fn main() {
             });
         }
     });
+}
+
+#[cfg(test)]
+mod external_link_tests {
+    use super::allowed_external_link;
+
+    #[test]
+    fn only_known_https_links_can_open() {
+        assert!(allowed_external_link("https://github.com/im-tesla/Spatial"));
+        assert!(allowed_external_link("https://lrclib.net"));
+        for url in [
+            "http://lrclib.net",
+            "https://lrclib.net.evil.example",
+            "https://github.com/im-tesla/Spatial/../../",
+            "file:///C:/Windows/System32/calc.exe",
+            "javascript:alert(1)",
+        ] {
+            assert!(!allowed_external_link(url), "Unexpectedly allowed {url}");
+        }
+    }
 }

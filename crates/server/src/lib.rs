@@ -1,3 +1,4 @@
+pub mod artists;
 pub mod config;
 pub mod db;
 pub mod http;
@@ -8,7 +9,7 @@ use anyhow::Result;
 use config::Config;
 use sqlx::SqlitePool;
 use std::{path::PathBuf, sync::Arc};
-use tokio::sync::{Mutex, broadcast};
+use tokio::sync::{Mutex, Semaphore, broadcast};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,6 +19,7 @@ pub struct AppState {
     pub artwork_root: Arc<PathBuf>,
     pub events: broadcast::Sender<u64>,
     pub scan_lock: Arc<Mutex<()>>,
+    pub artist_requests: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -36,6 +38,7 @@ impl AppState {
             artwork_root: Arc::new(artwork_root),
             events,
             scan_lock: Arc::new(Mutex::new(())),
+            artist_requests: Arc::new(Semaphore::new(3)),
         })
     }
 }

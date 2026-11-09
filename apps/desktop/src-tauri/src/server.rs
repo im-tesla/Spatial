@@ -5,6 +5,28 @@ use spatial_core::{Library, PlaybackGrant};
 use std::time::Duration;
 use tauri::Emitter;
 
+async fn image_data_url(response: reqwest::Response) -> Result<String, String> {
+    if response
+        .content_length()
+        .is_some_and(|size| size > 16 * 1024 * 1024)
+    {
+        return Err("Artwork image is too large".into());
+    }
+    let mut stream = response.bytes_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        if bytes.len() + chunk.len() > 16 * 1024 * 1024 {
+            return Err("Artwork image is too large".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    Ok(format!(
+        "data:image/jpeg;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
 #[derive(Clone)]
 pub struct Session {
     client: Client,
@@ -173,25 +195,37 @@ impl Session {
             return Err("Invalid artwork identifier".into());
         }
         let response = self.response(&format!("api/artwork/{id}"), false).await?;
-        if response
-            .content_length()
-            .is_some_and(|size| size > 16 * 1024 * 1024)
-        {
-            return Err("Artwork image is too large".into());
+        image_data_url(response).await
+    }
+
+    pub async fn artist_artwork(&self, name: &str) -> Result<Option<String>, String> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 160 {
+            return Err("Invalid artist name".into());
         }
-        let mut stream = response.bytes_stream();
-        let mut bytes = Vec::new();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| e.to_string())?;
-            if bytes.len() + chunk.len() > 16 * 1024 * 1024 {
-                return Err("Artwork image is too large".into());
-            }
-            bytes.extend_from_slice(&chunk);
+        let mut url = self
+            .base
+            .join("api/artists/artwork")
+            .map_err(|e| e.to_string())?;
+        url.query_pairs_mut().append_pair("name", name);
+        let response = self
+            .client
+            .get(url)
+            .bearer_auth(&self.token)
+            .timeout(Duration::from_secs(30))
+            .send()
+            .await
+            .map_err(|_| "Could not reach the server for the artist portrait".to_string())?;
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
         }
-        Ok(format!(
-            "data:image/jpeg;base64,{}",
-            base64::engine::general_purpose::STANDARD.encode(bytes)
-        ))
+        if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+            return Err("The server token is incorrect".into());
+        }
+        if !response.status().is_success() {
+            return Err("The server could not find an artist portrait".into());
+        }
+        image_data_url(response).await.map(Some)
     }
 
     pub async fn lyrics(&self, id: &str) -> Result<Option<spatial_core::SidecarLyrics>, String> {

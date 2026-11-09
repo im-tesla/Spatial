@@ -17,7 +17,7 @@ test("server word cues work in the sidebar and fullscreen without contacting LRC
   page.on("console", message => { if (message.text() === "Fixture LRCLIB request") requests.push(message.text()); });
   page.on("pageerror", error => errors.push(error.message));
   const sidebar = await playingSidebar(page, "sidecar=words");
-  await expect(sidebar.getByText("Local TTML", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Local lyrics", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Word-synced lyrics", { exact: true })).toBeVisible();
   await sidebar.getByRole("button", { name: "The lights turn green · Seek to 0:04", exact: true }).click();
   await expect(sidebar.locator('.lyric-word[data-word-state="active"]')).toHaveText("The ");
@@ -26,10 +26,10 @@ test("server word cues work in the sidebar and fullscreen without contacting LRC
   await expect(sidebar.locator('.lyric-word[data-word-state="active"]')).toHaveText("A ");
   await page.getByRole("button", { name: "Open fullscreen player", exact: true }).click();
   const fullscreen = page.getByRole("dialog", { name: "Fullscreen player", exact: true });
-  await expect(fullscreen.getByText("Local TTML", { exact: true })).toBeVisible();
+  await expect(fullscreen.getByText("Local lyrics", { exact: true })).toBeVisible();
   await expect(fullscreen.getByText("Word-synced lyrics", { exact: true })).toBeVisible();
   await expect(fullscreen.locator('.lyric-word[data-word-state="active"]')).toHaveText("A ");
-  await expect(page.locator(".sidebar nav button")).toHaveCount(4);
+  await expect(page.locator(".sidebar nav button")).toHaveCount(5);
   await expect(fullscreen).toHaveCSS("opacity", "1");
   await expect(fullscreen.locator(".listening-lyrics")).toHaveCSS("opacity", "1");
   expect(requests).toHaveLength(0);
@@ -41,7 +41,7 @@ test("line TTML takes precedence over a service word result and does not invent 
   const requests: string[] = [];
   page.on("console", message => { if (message.text() === "Fixture LRCLIB request") requests.push(message.text()); });
   const sidebar = await playingSidebar(page, "sidecar=lines&lyrics=words");
-  await expect(sidebar.getByText("Local TTML", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Local lyrics", { exact: true })).toBeVisible();
   await expect(sidebar.getByText("Line-synced lyrics", { exact: true })).toBeVisible();
   await expect(sidebar.locator(".lyric-word")).toHaveCount(0);
   expect(requests).toHaveLength(0);

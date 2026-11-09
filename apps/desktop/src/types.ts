@@ -12,8 +12,8 @@ export interface Library { revision: number; albums: Album[]; tracks: Track[] }
 export interface AudioDevice { name: string; description: string }
 export interface PlaybackStatus {
   track_id: string | null; active: boolean; paused: boolean; ended: boolean;
-  position: number; duration: number; passthrough: boolean; output_format: string;
-  output_driver: string; error: string | null;
+  position: number; duration: number; passthrough: boolean; output_mode: string;
+  output_format: string; output_driver: string; volume: number; error: string | null;
 }
 export interface RememberedConnection {
   address: string;

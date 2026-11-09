@@ -1,6 +1,6 @@
 # Discord activity
 
-Discord activity is enabled by default. Open **Settings** from the gear beside **Change server** to turn it off. The choice is saved on this desktop; an existing opt-out stays off after updating.
+Discord activity is enabled by default. Open **Settings** from the bottom of the sidebar, then **Integrations**, to turn it off. The choice is saved on this desktop; an existing opt-out stays off after updating.
 
 ![Discord activity in Spatial settings](screenshots/discord-settings.png)
 
