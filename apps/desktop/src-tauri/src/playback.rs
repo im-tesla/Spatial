@@ -683,7 +683,7 @@ mod tests {
         }
         assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1", false));
         assert!(valid_device("alsa/hdmi:CARD=NVidia,DEV=1", true));
-        assert!(valid_device("alsa:hw:CARD=Headphones,DEV=0", true));
+        assert!(valid_device("alsa/hw:CARD=Headphones,DEV=0", true));
         assert!(!valid_device("alsa/default", true));
         assert!(!valid_device("alsa/dmix:CARD=PCH", true));
     }
