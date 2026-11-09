@@ -64,6 +64,7 @@ jobs:
         run: |
           $env:Path += ';C:\ProgramData\chocolatey\bin'
           ./tools/setup-mpv.ps1
+          ./tools/prefetch-nsis.ps1
           cargo test --locked -p spatial-server
           cd apps/desktop
           npm ci

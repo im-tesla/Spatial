@@ -105,6 +105,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo test --locked -p spatial-desktop
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prefetch NSIS toolchain
+        shell: pwsh
+        run: ./tools/prefetch-nsis.ps1
       - name: Build signed installer and upload draft assets
         id: build
         uses: tauri-apps/tauri-action@v1
